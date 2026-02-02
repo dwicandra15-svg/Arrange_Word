@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arrange the Word Game - English Learning</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        .smooth-transition {
+            transition: all 0.2s ease-in-out;
+        }
+        #selectedWordsArea, #availableWordsArea {
+            transition: none;
+        }
+
+        /* Watermark */
+        .watermark {
+            position: fixed;
+            bottom: 58px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 16px;
+            color: rgba(120, 120, 148, 0.75);
+            font-style: italic;
+            letter-spacing: 1px;
+            pointer-events: none;
+            z-index: 9999;
+            user-select: none;
+        }
+
+        /* Settings gear button */
+        .gear-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 26px;
+            color: #6b7280;
+            transition: color 0.2s, transform 0.2s;
+            line-height: 1;
+            padding: 2px 6px;
+            border-radius: 8px;
+        }
+        .gear-btn:hover {
+            color: #3b82f6;
+            transform: rotate(18deg);
+            background: #e0e7ff;
+        }
+
+        /* Modal overlay */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.25s ease;
+        }
+        .modal-box {
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+            width: 90%;
+            max-width: 420px;
+            padding: 32px 28px 28px;
+            position: relative;
+        }
+        .modal-close {
+            position: absolute;
+            top: 14px; right: 18px;
+            background: none; border: none;
+            font-size: 22px; color: #9ca3af; cursor: pointer;
+            transition: color 0.2s;
+        }
+        .modal-close:hover { color: #ef4444; }
+
+        /* Settings menu items */
+        .settings-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 18px;
+            border-radius: 12px;
+            cursor: pointer;
+            border: 1.5px solid #e5e7eb;
+            transition: all 0.18s;
+            background: #fafafa;
+            margin-bottom: 10px;
+        }
+        .settings-item:hover {
+            border-color: #60a5fa;
+            background: #eff6ff;
+            box-shadow: 0 2px 8px rgba(59,130,246,0.15);
+        }
+        .settings-item .icon-circle {
+            width: 42px; height: 42px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        .settings-item .item-label {
+            font-weight: 600;
+            font-size: 15px;
+            color: #1f2937;
+        }
+        .settings-item .item-sub {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 1px;
+        }
+
+        /* Login input */
+        .login-input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid #d1d5db;
+            border-radius: 10px;
+            font-size: 15px;
+            outline: none;
+            transition: border 0.2s;
+            box-sizing: border-box;
+        }
+        .login-input:focus { border-color: #60a5fa; }
+        .login-input::placeholder { color: #9ca3af; }
+
+        /* Header edit inputs */
+        .header-input {
+            width: 100%;
+            padding: 9px 12px;
+            border: 1.5px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            transition: border 0.2s;
+            box-sizing: border-box;
+        }
+        .header-input:focus { border-color: #a78bfa; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen">
+    <div id="app"></div>
+
+    <!-- Watermark (always visible) -->
+    <div class="watermark">✦ Created &amp; Developed by D.D Candra ✦</div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" style="display:none;" class="modal-overlay" onclick="closeSettingsOnOverlay(event)">
+        <div class="modal-box" id="settingsBox">
+            <button class="modal-close" onclick="closeSettings()">✕</button>
+
+            <!-- LOGIN SCREEN -->
+            <div id="loginScreen">
+                <div class="text-center mb-5">
+                    <div style="font-size:38px; margin-bottom:4px;">⚙️</div>
+                    <h2 class="text-xl font-bold text-gray-800">Settings</h2>
+                    <p class="text-sm text-gray-500 mt-1">Login required to access</p>
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <input type="text" id="loginUser" class="login-input" placeholder="Enter username" autocomplete="off">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <input type="password" id="loginPass" class="login-input" placeholder="Enter password" autocomplete="off" onkeydown="if(event.key==='Enter') attemptLogin()">
+                </div>
+                <div id="loginError" class="text-red-500 text-sm text-center mb-3" style="display:none; min-height:18px;">Invalid username or password!</div>
+                <button onclick="attemptLogin()" class="w-full py-2.5 bg-blue-500 text-white rounded-10 font-semibold text-base hover:bg-blue-600 transition-colors" style="border-radius:10px;">
+                    🔓 Login
+                </button>
+            </div>
+
+            <!-- SETTINGS MENU (shown after login) -->
+            <div id="settingsMenu" style="display:none;">
+                <div class="text-center mb-5">
+                    <div style="font-size:34px; margin-bottom:2px;">⚙️</div>
+                    <h2 class="text-xl font-bold text-gray-800">Settings</h2>
+                </div>
+
+                <!-- Header / Logo Edit -->
+                <div class="settings-item" onclick="openHeaderEdit()">
+                    <div class="icon-circle" style="background:#ede9fe;">🎨</div>
+                    <div>
+                        <div class="item-label">Header / Logo</div>
+                        <div class="item-sub">Edit title & subtitle</div>
+                    </div>
+                </div>
+
+                <!-- View Report -->
+                <div class="settings-item" onclick="goSecure('report')">
+                    <div class="icon-circle" style="background:#dbeafe;">📊</div>
+                    <div>
+                        <div class="item-label">View Report</div>
+                        <div class="item-sub">See student results</div>
+                    </div>
+                </div>
+
+                <!-- Add Question -->
+                <div class="settings-item" onclick="goSecure('add')">
+                    <div class="icon-circle" style="background:#ede9fe;">➕</div>
+                    <div>
+                        <div class="item-label">Add Question</div>
+                        <div class="item-sub">Create a new question</div>
+                    </div>
+                </div>
+
+                <!-- Manage Questions -->
+                <div class="settings-item" onclick="goSecure('manage')">
+                    <div class="icon-circle" style="background:#fff7ed;">✏️</div>
+                    <div>
+                        <div class="item-label">Manage Questions</div>
+                        <div class="item-sub">Edit or delete questions</div>
+                    </div>
+                </div>
+
+                <!-- Repeat Toggle -->
+                <div class="settings-item" style="cursor:default;" onclick="event.stopPropagation();">
+                    <div class="icon-circle" style="background:#dcfce7;">🔁</div>
+                    <div style="flex:1;">
+                        <div class="item-label">Repeat Game</div>
+                        <div class="item-sub">Allow students to repeat</div>
+                    </div>
+                    <!-- Toggle switch -->
+                    <div onclick="toggleRepeat()" style="position:relative;width:48px;height:26px;flex-shrink:0;cursor:pointer;">
+                        <div id="repeatTrack" style="position:absolute;inset:0;border-radius:13px;background:#d1d5db;transition:background 0.25s;"></div>
+                        <div id="repeatThumb" style="position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);transition:left 0.25s;"></div>
+                    </div>
+                </div>
+
+                <!-- Statistics -->
+                <div class="settings-item" onclick="openStatistics()">
+                    <div class="icon-circle" style="background:#dbeafe;">📊</div>
+                    <div>
+                        <div class="item-label">Statistics</div>
+                        <div class="item-sub">Total questions & attempts</div>
+                    </div>
+                </div>
+
+                <!-- Close -->
+                <button onclick="closeSettings()" class="w-full mt-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium" style="border-radius:10px;">
+                    Close
+                </button>
+            </div>
+
+            <!-- HEADER EDIT PANEL (shown when editing title/subtitle) -->
+            <div id="headerEditPanel" style="display:none;">
+                <div class="text-center mb-4">
+                    <div style="font-size:30px; margin-bottom:2px;">🎨</div>
+                    <h2 class="text-lg font-bold text-gray-800">Header / Logo Edit</h2>
+                    <p class="text-xs text-gray-500 mt-1">Customize title & subtitle</p>
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                    <input type="text" id="editTitle" class="header-input" placeholder="e.g., Arrange the Word Game">
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Subtitle</label>
+                    <input type="text" id="editSubtitle" class="header-input" placeholder="e.g., Learn English by arranging words into sentences!">
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Title Icon (emoji)</label>
+                    <input type="text" id="editIcon" class="header-input" placeholder="e.g., 🎯">
+                </div>
+                <div class="flex gap-3 mt-5">
+                    <button onclick="saveHeaderEdit()" class="flex-1 py-2 bg-purple-500 text-white font-semibold text-sm hover:bg-purple-600 transition-colors" style="border-radius:10px;">
+                        💾 Save
+                    </button>
+                    <button onclick="backToSettingsMenu()" class="flex-1 py-2 bg-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-300 transition-colors" style="border-radius:10px;">
+                        ← Back
+                    </button>
+                </div>
+            <!-- STATISTICS PANEL -->
+            <div id="statisticsPanel" style="display:none;">
+                <div class="text-center mb-5">
+                    <div style="font-size:32px; margin-bottom:2px;">📊</div>
+                    <h2 class="text-lg font-bold text-gray-800">Statistics</h2>
+                </div>
+
+                <!-- Stats cards -->
+                <div style="display:flex; gap:10px; margin-bottom:14px;">
+                    <div style="flex:1; background:#eff6ff; border-radius:12px; padding:14px 10px; text-align:center; border:1.5px solid #bfdbfe;">
+                        <div id="statQuestionsNum" style="font-size:28px; font-weight:700; color:#2563eb;">0</div>
+                        <div style="font-size:11px; color:#6b7280; margin-top:2px;">Total Questions</div>
+                    </div>
+                    <div style="flex:1; background:#f0fdf4; border-radius:12px; padding:14px 10px; text-align:center; border:1.5px solid #bbf7d0;">
+                        <div id="statAttemptsNum" style="font-size:28px; font-weight:700; color:#16a34a;">0</div>
+                        <div style="font-size:11px; color:#6b7280; margin-top:2px;">Total Attempts</div>
+                    </div>
+                    <div style="flex:1; background:#fdf4ff; border-radius:12px; padding:14px 10px; text-align:center; border:1.5px solid #e9d5ff;">
+                        <div id="statNamesNum" style="font-size:28px; font-weight:700; color:#9333ea;">0</div>
+                        <div style="font-size:11px; color:#6b7280; margin-top:2px;">Students</div>
+                    </div>
+                </div>
+
+                <!-- Clear button (only visible when there is data) -->
+                <div id="statClearWrap" style="display:none; margin-bottom:10px;">
+                    <button onclick="clearAllData(); openStatistics();" style="width:100%; padding:10px; background:#ef4444; color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;">
+                        🗑️ Clear All Student Data
+                    </button>
+                </div>
+
+                <!-- Back -->
+                <button onclick="backToSettingsMenu()" class="w-full py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium" style="border-radius:10px;">
+                    ← Back
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ─── App State ───
+        let appState = {
+            questions: [
+                {
+                    id: 1,
+                    words: ['is', 'This', 'book', 'a'],
+                    correctSentence: 'This is a book',
+                    image: '📚',
+                    score: 10
+                },
+                {
+                    id: 2,
+                    words: ['cat', 'The', 'sleeping', 'is'],
+                    correctSentence: 'The cat is sleeping',
+                    image: '🐱',
+                    score: 10
+                },
+                {
+                    id: 3,
+                    words: ['play', 'Children', 'the', 'in', 'park'],
+                    correctSentence: 'Children play in the park',
+                    image: '🎮',
+                    score: 15
+                }
+            ],
+            currentScreen: 'menu',
+            currentQuestion: 0,
+            selectedWords: [],
+            availableWords: [],
+            studentName: '',
+            studentClass: '',
+            results: [],
+            allResults: [],   // permanent history (never cleared by new game; used for one-name check)
+            formWords: '',
+            formSentence: '',
+            formImage: '📝',
+            formScore: 10,
+            editingQuestion: null,
+            // Custom header
+            customTitle: 'Arrange the Word Game',
+            customSubtitle: 'Learn English by arranging words into sentences!',
+            customIcon: '🎯',
+            // Repeat permission flag
+            repeatEnabled: false
+        };
+
+        // Security credentials
+        const SETTINGS_USER = 'Unknown';
+        const SETTINGS_PASS = '56789';
+        let settingsUnlocked = false;
+
+        // ─── LocalStorage ───
+        function saveToLocalStorage() {
+            try {
+                localStorage.setItem('wordGameQuestions', JSON.stringify(appState.questions));
+                localStorage.setItem('wordGameResults', JSON.stringify(appState.results));
+                localStorage.setItem('wordGameAllResults', JSON.stringify(appState.allResults));
+                localStorage.setItem('wordGameHeader', JSON.stringify({
+                    title: appState.customTitle,
+                    subtitle: appState.customSubtitle,
+                    icon: appState.customIcon,
+                    repeatEnabled: appState.repeatEnabled
+                }));
+            } catch (e) {
+                console.error('Error saving to localStorage:', e);
+            }
+        }
+
+        function loadFromLocalStorage() {
+            try {
+                const savedQuestions = localStorage.getItem('wordGameQuestions');
+                const savedResults = localStorage.getItem('wordGameResults');
+                const savedAllResults = localStorage.getItem('wordGameAllResults');
+                const savedHeader = localStorage.getItem('wordGameHeader');
+
+                if (savedQuestions)  appState.questions   = JSON.parse(savedQuestions);
+                if (savedResults)    appState.results     = JSON.parse(savedResults);
+                if (savedAllResults) appState.allResults  = JSON.parse(savedAllResults);
+                if (savedHeader) {
+                    const h = JSON.parse(savedHeader);
+                    if (h.title)    appState.customTitle    = h.title;
+                    if (h.subtitle) appState.customSubtitle = h.subtitle;
+                    if (h.icon)     appState.customIcon     = h.icon;
+                    if (typeof h.repeatEnabled === 'boolean') appState.repeatEnabled = h.repeatEnabled;
+                }
+            } catch (e) {
+                console.error('Error loading from localStorage:', e);
+            }
+        }
+
+        // ─── Utility ───
+        function shuffleArray(array) {
+            const newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+        }
+
+        // ─── Settings Modal Logic ───
+        function openSettings() {
+            document.getElementById('settingsModal').style.display = 'flex';
+            // Reset login fields
+            document.getElementById('loginUser').value = '';
+            document.getElementById('loginPass').value = '';
+            document.getElementById('loginError').style.display = 'none';
+
+            if (settingsUnlocked) {
+                showSettingsMenu();
+            } else {
+                showLoginScreen();
+            }
+        }
+
+        function closeSettings() {
+            document.getElementById('settingsModal').style.display = 'none';
+        }
+
+        function closeSettingsOnOverlay(e) {
+            if (e.target === document.getElementById('settingsModal')) closeSettings();
+        }
+
+        function showLoginScreen() {
+            document.getElementById('loginScreen').style.display   = 'block';
+            document.getElementById('settingsMenu').style.display  = 'none';
+            document.getElementById('headerEditPanel').style.display = 'none';
+        }
+
+        function showSettingsMenu() {
+            document.getElementById('loginScreen').style.display      = 'none';
+            document.getElementById('settingsMenu').style.display     = 'block';
+            document.getElementById('headerEditPanel').style.display  = 'none';
+            document.getElementById('statisticsPanel').style.display  = 'none';
+            syncRepeatUI();
+        }
+
+        function attemptLogin(
+         const user = document.getElementById('loginUser').value.trim();
+            const pass = document.getElementById('loginPass').value.trim();
+
+            if (user === SETTINGS_USER && pass === SETTINGS_PASS) {
+                settingsUnlocked = true;
+                document.getElementById('loginError').style.display = 'none';
+                showSettingsMenu();
+            } else {
+                document.getElementById('loginError').style.display = 'block';
+                document.getElementById('loginPass').value = '';
+                document.getElementById('loginPass').focus();
+            }
+        }
+
+        function goSecure(screen) {
+            closeSettings();
+            changeScreen(screen);
+        }
+
+        // ─── Repeat Toggle ───
+        function toggleRepeat() {
+            appState.repeatEnabled = !appState.repeatEnabled;
+            saveToLocalStorage();
+            syncRepeatUI();
+        }
+
+        function syncRepeatUI() {
+            const track = document.getElementById('repeatTrack');
+            const thumb = document.getElementById('repeatThumb');
+            if (!track || !thumb) return;
+            if (appState.repeatEnabled) {
+                track.style.background = '#22c55e';
+                thumb.style.left = '25px';
+            } else {
+                track.style.background = '#d1d5db';
+                thumb.style.left = '3px';
+            }
+        }
+
+        // ─── Header Edit Panel ───
+        function openHeaderEdit() {
+            document.getElementById('loginScreen').style.display     = 'none';
+            document.getElementById('settingsMenu').style.display    = 'none';
+            document.getElementById('headerEditPanel').style.display = 'block';
+            document.getElementById('editTitle').value    = appState.customTitle;
+            document.getElementById('editSubtitle').value = appState.customSubtitle;
+            document.getElementById('editIcon').value     = appState.customIcon;
+        }
+
+        function backToSettingsMenu() {
+            showSettingsMenu();
+        }
+
+        // ─── Statistics Panel ───
+        function openStatistics() {
+            document.getElementById('loginScreen').style.display      = 'none';
+            document.getElementById('settingsMenu').style.display     = 'none';
+            document.getElementById('headerEditPanel').style.display  = 'none';
+            document.getElementById('statisticsPanel').style.display  = 'block';
+
+            // Live numbers
+            const uniqueNames = new Set(appState.allResults.map(r => normaliseName(r.studentName)));
+            document.getElementById('statQuestionsNum').textContent = appState.questions.length;
+            document.getElementById('statAttemptsNum').textContent  = appState.allResults.length;
+            document.getElementById('statNamesNum').textContent     = uniqueNames.size;
+
+            // Show/hide clear button
+            document.getElementById('statClearWrap').style.display = appState.allResults.length > 0 ? 'block' : 'none';
+        }
+
+        function saveHeaderEdit() {
+            const t = document.getElementById('editTitle').value.trim();
+            const s = document.getElementById('editSubtitle').value.trim();
+            const i = document.getElementById('editIcon').value.trim();
+            if (t) appState.customTitle    = t;
+            if (s) appState.customSubtitle = s;
+            if (i) appState.customIcon     = i;
+            saveToLocalStorage();
+            closeSettings();
+            render();
+        }
+
+        // ─── PDF Download ───
+        function downloadPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            const totalScore = appState.results.reduce((sum, r) => sum + (r.isCorrect ? r.score : 0), 0);
+            const maxScore   = appState.results.reduce((sum, r) => sum + r.score, 0);
+            const percentage = maxScore > 0 ? ((totalScore / maxScore) * 100).toFixed(1) : 0;
+
+            // Header – use custom title
+            doc.setFontSize(20);
+            doc.setTextColor(79, 70, 229);
+            doc.text('STUDENT REPORT', 105, 20, { align: 'center' });
+            doc.text(appState.customTitle, 105, 30, { align: 'center' });
+
+            doc.setDrawColor(79, 70, 229);
+            doc.setLineWidth(0.5);
+            doc.line(20, 35, 190, 35);
+
+            doc.setFontSize(12);
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Student Name: ${appState.studentName}`, 20, 45);
+            doc.text(`Class: ${appState.studentClass}`, 20, 52);
+            doc.text(`Date: ${new Date().toLocaleString()}`, 20, 59);
+            doc.text(`Score: ${totalScore} / ${maxScore} (${percentage}%)`, 20, 66);
+
+            doc.line(20, 72, 190, 72);
+
+            doc.setFontSize(14);
+            doc.setTextColor(79, 70, 229);
+            doc.text('DETAILED RESULTS:', 20, 82);
+
+            doc.setFontSize(10);
+            doc.setTextColor(0, 0, 0);
+            let yPos = 92;
+
+            appState.results.forEach((result, index) => {
+                if (yPos > 270) { doc.addPage(); yPos = 20; }
+
+                doc.setFont(undefined, 'bold');
+                doc.text(`Question ${index + 1}: (${result.score} points)`, 20, yPos);
+                yPos += 7;
+
+                doc.setFont(undefined, 'normal');
+                if (result.isCorrect) {
+                    doc.setTextColor(0, 128, 0);
+                    doc.text(`Status: CORRECT - Earned ${result.score} points`, 25, yPos);
+                } else {
+                    doc.setTextColor(220, 38, 38);
+                    doc.text('Status: INCORRECT - 0 points', 25, yPos);
+                }
+                doc.setTextColor(0, 0, 0);
+                yPos += 7;
+
+                doc.text(`Correct Answer: ${result.question}`, 25, yPos);
+                yPos += 7;
+                doc.text(`Student Answer: ${result.userAnswer}`, 25, yPos);
+                yPos += 7;
+
+                doc.setFontSize(8);
+                doc.setTextColor(128, 128, 128);
+                doc.text(`Time: ${result.timestamp}`, 25, yPos);
+                doc.setFontSize(10);
+                doc.setTextColor(0, 0, 0);
+                yPos += 10;
+            });
+
+            // Footer with watermark on every page
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(7);
+                doc.setTextColor(160, 160, 170);
+                doc.text('Created & Developed by D.D Candra', 105, 284, { align: 'center' });
+                doc.setFontSize(8);
+                doc.setTextColor(128, 128, 128);
+                doc.text(`Page ${i} of ${pageCount}`, 105, 290, { align: 'center' });
+            }
+
+            doc.save(`${appState.studentName}_Report_${Date.now()}.pdf`);
+        }
+
+        // ─── Render: Menu ───
+        function renderMenu() {
+            return `
+                <div class="max-w-4xl mx-auto p-6 fade-in">
+                    <div class="bg-white rounded-2xl shadow-xl p-8">
+
+                        <!-- Title row with gear icon -->
+                        <div class="flex items-center justify-center gap-2 mb-2">
+                            <h1 class="text-4xl font-bold text-center text-blue-600">
+                                ${appState.customIcon} ${appState.customTitle}
+                            </h1>
+                            <button class="gear-btn" onclick="openSettings()" title="Settings">⚙️</button>
+                        </div>
+                        <p class="text-center text-gray-600 mb-8">${appState.customSubtitle}</p>
+
+                        <!-- Student info fields -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium mb-2">Student Name:</label>
+                            <input
+                                type="text"
+                                id="studentName"
+                                value="${appState.studentName}"
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="Enter your name"
+                            />
+                        </div>
+
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium mb-2">Class:</label>
+                            <input
+                                type="text"
+                                id="studentClass"
+                                value="${appState.studentClass}"
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="Enter your class (e.g., 5A, 6B)"
+                            />
+                        </div>
+
+                        <!-- Only Start Game button on main menu -->
+                        <div class="mb-8">
+                            <button onclick="startGame()" class="w-full flex items-center justify-center gap-2 bg-green-500 text-white px-6 py-4 rounded-xl hover:bg-green-600 transition-colors font-semibold text-lg">
+                                ▶️ Start Game
+                            </button>
+                        </div>
+
+
+                    </div>
+                </div>
+            `;
+        }
+
+        // ─── Render: Add Question ───
+        function renderAddQuestion() {
+            return `
+                <div class="max-w-2xl mx-auto p-6 fade-in">
+                    <div class="bg-white rounded-2xl shadow-xl p-8">
+                        <h2 class="text-3xl font-bold mb-6 text-purple-600">➕ Add New Question</h2>
+
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Words (separate with commas):</label>
+                                <input type="text" id="formWords" value="${appState.formWords}"
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                    placeholder="e.g., is, This, book, a" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Correct Sentence:</label>
+                                <input type="text" id="formSentence" value="${appState.formSentence}"
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                    placeholder="e.g., This is a book" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Image (emoji):</label>
+                                <input type="text" id="formImage" value="${appState.formImage}"
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                    placeholder="e.g., 📚" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Score (points):</label>
+                                <input type="number" id="formScore" value="${appState.formScore}" min="1" max="100"
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                    placeholder="e.g., 10" />
+                            </div>
+                            <div class="flex gap-4">
+                                <button onclick="handleAddQuestion()" class="flex-1 flex items-center justify-center gap-2 bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 transition-colors font-semibold">
+                                    💾 Save Question
+                                </button>
+                                <button onclick="changeScreen('menu')" class="flex items-center justify-center gap-2 bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors">
+                                    ❌ Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ─── Render: Manage Questions ───
+        function renderManageQuestions() {
+            return `
+                <div class="max-w-4xl mx-auto p-6 fade-in">
+                    <div class="bg-white rounded-2xl shadow-xl p-8">
+                        <h2 class="text-3xl font-bold mb-6 text-orange-600">📝 Manage Questions</h2>
+
+                        <div class="space-y-4">
+                            ${appState.questions.map((q, index) => `
+                                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-3 mb-2">
+                                                <span class="text-3xl">${q.image}</span>
+                                                <div>
+                                                    <p class="font-semibold text-lg">Question ${index + 1}</p>
+                                                    <p class="text-sm text-gray-600">Words: ${q.words.join(', ')}</p>
+                                                    <p class="text-sm text-green-600 font-medium">Answer: ${q.correctSentence}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button onclick="startEdit(${q.id})" class="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors">✏️</button>
+                                            <button onclick="deleteQuestion(${q.id})" class="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors">🗑️</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <button onclick="changeScreen('menu')" class="mt-6 w-full bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors font-semibold">
+                            Back to Menu
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ─── Render: Edit Question ───
+        function renderEditQuestion() {
+            return `
+                <div class="max-w-2xl mx-auto p-6 fade-in">
+                    <div class="bg-white rounded-2xl shadow-xl p-8">
+                        <h2 class="text-3xl font-bold mb-6 text-blue-600">✏️ Edit Question</h2>
+
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Words (separate with commas):</label>
+                                <input type="text" id="formWords" value="${appState.formWords}"
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Correct Sentence:</label>
+                                <input type="text" id="formSentence" value="${appState.formSentence}"
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Image (emoji):</label>
+                                <input type="text" id="formImage" value="${appState.formImage}"
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Score (points):</label>
+                                <input type="number" id="formScore" value="${appState.formScore}" min="1" max="100"
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    placeholder="e.g., 10" />
+                            </div>
+                            <div class="flex gap-4">
+                                <button onclick="handleUpdateQuestion()" class="flex-1 flex items-center justify-center gap-2 bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-semibold">
+                                    💾 Update Question
+                                </button>
+                                <button onclick="changeScreen('manage')" class="flex items-center justify-center gap-2 bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors">
+                                    ❌ Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ─── Render: Play Game ───
+        function renderPlayGame() {
+            const question = appState.questions[appState.currentQuestion];
+            return `
+                <div class="max-w-4xl mx-auto p-6 fade-in">
+                    <div class="bg-white rounded-2xl shadow-xl p-8">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold text-green-600">
+                                Question ${appState.currentQuestion + 1} of ${appState.questions.length}
+                            </h2>
+                            <button onclick="changeScreen('menu')" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">
+                                Exit
+                            </button>
+                        </div>
+
+                        <div class="text-center mb-8">
+                            <div class="text-8xl mb-4">${question.image}</div>
+                            <p class="text-xl font-medium text-gray-700">Arrange the words to form a correct sentence:</p>
+                            <p class="text-lg font-semibold text-blue-600 mt-2">Score: ${question.score} points</p>
+                        </div>
+
+                        <div class="mb-8">
+                            <h3 class="text-lg font-semibold mb-3">Your Answer:</h3>
+                            <div id="selectedWordsArea" class="min-h-[80px] bg-blue-50 border-2 border-blue-300 rounded-lg p-4 flex flex-wrap gap-2">
+                                ${appState.selectedWords.length === 0
+                                    ? '<p class="text-gray-400 italic">Tap words below to build your sentence</p>'
+                                    : appState.selectedWords.map(word =>
+                                        `<button onclick="moveWordToAvailable('${word}')" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 smooth-transition font-medium">${word}</button>`
+                                    ).join('')
+                                }
+                            </div>
+                        </div>
+
+                        <div class="mb-8">
+                     <h3 class="text-lg font-semibold mb-3">Available Words:</h3>
+                            <div id="availableWordsArea" class="flex flex-wrap gap-2">
+                                ${appState.availableWords.map(word =>
+                                    `<button onclick="moveWordToSelected('${word}')" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 smooth-transition font-medium">${word}</button>`
+                                ).join('')}
+                            </div>
+                        </div>
+
+                        <button onclick="checkAnswer()" class="w-full bg-green-500 text-white px-6 py-4 rounded-xl hover:bg-green-600 transition-colors font-bold text-lg">
+                            ✓ Check Answer
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ─── Render: Report ───
+        function renderReport() {
+            const totalScore = appState.results.reduce((sum, r) => sum + (r.isCorrect ? r.score : 0), 0);
+            const maxScore   = appState.results.reduce((sum, r) => sum + r.score, 0);
+            const percentage = maxScore > 0 ? ((totalScore / maxScore) * 100).toFixed(1) : 0;
+
+            if (appState.results.length === 0) {
+                return `
+                    <div class="max-w-4xl mx-auto p-6 fade-in">
+                        <div class="bg-white rounded-2xl shadow-xl p-8">
+                            <!-- Use custom title in report header -->
+                            <h2 class="text-3xl font-bold mb-2 text-indigo-600">${appState.customIcon} ${appState.customTitle}</h2>
+                            <p class="text-gray-500 mb-6">${appState.customSubtitle}</p>
+                            <h3 class="text-xl font-bold text-indigo-600 mb-4">📊 Student Report</h3>
+                            <div class="text-center py-12">
+                                <p class="text-xl text-gray-500 mb-6">No results yet. Play the game first!</p>
+                                <button onclick="changeScreen('menu')" class="bg-indigo-500 text-white px-6 py-3 rounded-lg hover:bg-indigo-600">
+                                    Back to Menu
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="max-w-4xl mx-auto p-6 fade-in">
+                    <div class="bg-white rounded-2xl shadow-xl p-8">
+                        <!-- Custom header on report page -->
+                        <h2 class="text-3xl font-bold mb-1 text-indigo-600">${appState.customIcon} ${appState.customTitle}</h2>
+                        <p class="text-gray-500 mb-5">${appState.customSubtitle}</p>
+                        <h3 class="text-xl font-bold text-indigo-600 mb-4">📊 Student Report</h3>
+
+                        <div class="bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl p-6 mb-6">
+                            <h3 class="text-2xl font-bold mb-2">Student: ${appState.studentName}</h3>
+                            <p class="text-lg mb-1">Class: ${appState.studentClass}</p>
+                            <p class="text-xl font-bold">Score: ${totalScore} / ${maxScore} (${percentage}%)</p>
+                        </div>
+
+                        <div class="space-y-4 mb-6">
+                            ${appState.results.map((result, index) => `
+                                <div class="border-2 rounded-lg p-4 ${result.isCorrect ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}">
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex-1">
+                                            <p class="font-semibold text-lg mb-2">
+                                                ${result.isCorrect ? '✅' : '❌'} Question ${result.questionNumber} - ${result.score} points
+                                            </p>
+                                            <p class="text-sm font-medium ${result.isCorrect ? 'text-green-700' : 'text-red-700'}">
+                                                ${result.isCorrect ? `Earned: ${result.score} points` : 'Earned: 0 points'}
+                                            </p>
+                                            <p class="text-sm text-gray-700 mt-1">
+                                                <span class="font-medium">Correct Answer:</span> ${result.question}
+                                            </p>
+                                            <p class="text-sm text-gray-700">
+                                                <span class="font-medium">Your Answer:</span> ${result.userAnswer}
+                                            </p>
+                                            <p class="text-xs text-gray-500 mt-1">${result.timestamp}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <div class="flex gap-4">
+                            <button onclick="downloadPDF()" class="flex-1 flex items-center justify-center gap-2 bg-indigo-500 text-white px-6 py-3 rounded-lg hover:bg-indigo-600 transition-colors font-semibold">
+                                📥 Download PDF Report
+                            </button>
+                            <button onclick="changeScreen('menu')" class="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors">
+                                Back to Menu
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ─── Action Handlers ───
+        function changeScreen(screen) {
+            appState.currentScreen = screen;
+            render();
+        }
+
+        // ─── Name normalisation helper (trim + collapse spaces + lowercase) ───
+        function normaliseName(name) {
+            return name.trim().replace(/\s+/g, ' ').toLowerCase();
+        }
+
+        function startGame() {
+            const nameInput  = document.getElementById('studentName');
+            const classInput = document.getElementById('studentClass');
+            if (nameInput)  appState.studentName  = nameInput.value;
+            if (classInput) appState.studentClass = classInput.value;
+
+            if (!appState.studentName.trim()) {
+                alert('Please enter your name first!');
+                return;
+            }
+            if (!appState.studentClass.trim()) {
+                alert('Please enter your class first!');
+                return;
+            }
+
+            // ─── One-name-one-chance check ───
+            const currentNorm = normaliseName(appState.studentName);
+
+            // Collect all unique normalised names that have already played (from ALL saved results)
+            const playedNames = [...new Set(
+                appState.allResults
+                    .map(r => normaliseName(r.studentName))
+            )];
+
+            if (playedNames.includes(currentNorm)) {
+                // Name already exists in history
+                if (!appState.repeatEnabled) {
+                    // Repeat is OFF  → block
+                    alert(
+                        '🚫 Nama "' + appState.studentName.trim() + '" sudah pernah mengerjakan game ini.\n\n' +
+                        'Setiap siswa hanya boleh mengerjakan 1x.\n' +
+                        'Hubungi guru untuk mengaktifkan fitur Repeat jika diperlukan.'
+                    );
+                    return;
+                }
+                // Repeat is ON → allow, no block
+            }
+
+            appState.currentQuestion = 0;
+            appState.results = [];          // session results (for current play)
+            appState.selectedWords = [];
+            appState.availableWords = shuffleArray(appState.questions[0].words);
+            appState.currentScreen = 'play';
+            render();
+        }
+
+        function moveWordToSelected(word) {
+            appState.selectedWords.push(word);
+            appState.availableWords = appState.availableWords.filter(w => w !== word);
+            updateGameDisplay();
+        }
+
+        function moveWordToAvailable(word) {
+            appState.availableWords.push(word);
+            appState.selectedWords = appState.selectedWords.filter(w => w !== word);
+            updateGameDisplay();
+        }
+
+        function updateGameDisplay() {
+            const selectedArea  = document.getElementById('selectedWordsArea');
+            const availableArea = document.getElementById('availableWordsArea');
+
+            if (selectedArea) {
+                if (appState.selectedWords.length === 0) {
+                    selectedArea.innerHTML = '<p class="text-gray-400 italic">Tap words below to build your sentence</p>';
+                } else {
+                    selectedArea.innerHTML = appState.selectedWords.map(word =>
+                        `<button onclick="moveWordToAvailable('${word}')" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 smooth-transition font-medium">${word}</button>`
+                    ).join('');
+                }
+            }
+
+            if (availableArea) {
+                availableArea.innerHTML = appState.availableWords.map(word =>
+                    `<button onclick="moveWordToSelected('${word}')" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 smooth-transition font-medium">${word}</button>`
+                ).join('');
+            }
+        }
+
+        function checkAnswer() {
+            if (appState.selectedWords.length === 0) {
+                alert('⚠️ Please select at least one word to form a sentence!');
+                return;
+            }
+
+            const userAnswer    = appState.selectedWords.join(' ');
+            const correctAnswer = appState.questions[appState.currentQuestion].correctSentence;
+            const questionScore = appState.questions[appState.currentQuestion].score;
+            const isCorrect     = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+
+            const result = {
+                studentName:    appState.studentName,
+                questionNumber: appState.currentQuestion + 1,
+                question:       correctAnswer,
+                userAnswer:     userAnswer,
+                isCorrect:      isCorrect,
+                score:          questionScore,
+                timestamp:      new Date().toLocaleString()
+            };
+
+            appState.results.push(result);
+            appState.allResults.push(result);   // permanent history for one-name check
+            saveToLocalStorage();
+
+            if (isCorrect) {
+                alert(`🎉 Correct! Well done! You earned ${questionScore} points!`);
+            } else {
+                alert(`❌ Incorrect. The correct answer is: ${correctAnswer}\nYou earned 0 points.`);
+            }
+
+            if (appState.currentQuestion < appState.questions.length - 1) {
+                appState.currentQuestion++;
+                appState.selectedWords  = [];
+                appState.availableWords = shuffleArray(appState.questions[appState.currentQuestion].words);
+                render();
+            } else {
+                const totalScore = appState.results.reduce((sum, r) => sum + (r.isCorrect ? r.score : 0), 0);
+                const maxScore   = appState.results.reduce((sum, r) => sum + r.score, 0);
+                alert(`🎊 Game completed!\n\nYour Total Score: ${totalScore} / ${maxScore}\n\nCheck the report for details.`);
+                appState.currentScreen = 'report';
+                render();
+            }
+        }
+
+        function handleAddQuestion() {
+            const wordsInput    = document.getElementById('formWords');
+            const sentenceInput = document.getElementById('formSentence');
+            const imageInput    = document.getElementById('formImage');
+            const scoreInput    = document.getElementById('formScore');
+
+            if (wordsInput)    appState.formWords    = wordsInput.value;
+            if (sentenceInput) appState.formSentence = sentenceInput.value;
+            if (imageInput)    appState.formImage    = imageInput.value;
+            if (scoreInput)    appState.formScore    = parseInt(scoreInput.value) || 10;
+
+            if (!appState.formWords.trim() || !appState.formSentence.trim()) {
+                alert('Please fill in all required fields!');
+                return;
+            }
+
+            const wordsArray = appState.formWords.split(',').map(w => w.trim()).filter(w => w);
+            appState.questions.push({
+                id: Date.now(),
+                words: wordsArray,
+                correctSentence: appState.formSentence,
+                image: appState.formImage,
+                score: appState.formScore
+            });
+
+            saveToLocalStorage();
+            appState.formWords    = '';
+            appState.formSentence = '';
+            appState.formImage    = '📝';
+            appState.formScore    = 10;
+            alert('✅ Question added successfully!');
+            changeScreen('menu');
+        }
+
+        function startEdit(questionId) {
+            const question = appState.questions.find(q => q.id === questionId);
+            if (question) {
+                appState.editingQuestion = question;
+                appState.formWords       = question.words.join(', ');
+                appState.formSentence    = question.correctSentence;
+                appState.formImage       = question.image;
+                appState.formScore       = question.score || 10;
+                appState.currentScreen   = 'edit';
+                render();
+            }
+        }
+
+        function handleUpdateQuestion() {
+            const wordsInput    = document.getElementById('formWords');
+            const sentenceInput = document.getElementById('formSentence');
+            const imageInput    = document.getElementById('formImage');
+            const scoreInput    = document.getElementById('formScore');
+
+            if (wordsInput)    appState.formWords    = wordsInput.value;
+            if (sentenceInput) appState.formSentence = sentenceInput.value;
+            if (imageInput)    appState.formImage    = imageInput.value;
+            if (scoreInput)    appState.formScore    = parseInt(scoreInput.value) || 10;
+
+            if (!appState.formWords.trim() || !appState.formSentence.trim()) {
+                alert('Please fill in all required fields!');
+                return;
+            }
+
+            const wordsArray = appState.formWords.split(',').map(w => w.trim()).filter(w => w);
+            appState.questions = appState.questions.map(q =>
+                q.id === appState.editingQuestion.id
+                    ? { ...q, words: wordsArray, correctSentence: appState.formSentence, image: appState.formImage, score: appState.formScore }
+                    : q
+            );
+
+            saveToLocalStorage();
+            appState.editingQuestion = null;
+            appState.formWords       = '';
+            appState.formSentence    = '';
+            appState.formImage       = '📝';
+            appState.formScore       = 10;
+            alert('✅ Question updated successfully!');
+            changeScreen('menu');
+        }
+
+        function deleteQuestion(questionId) {
+            if (confirm('Are you sure you want to delete this question?')) {
+                appState.questions = appState.questions.filter(q => q.id !== questionId);
+                saveToLocalStorage();
+                render();
+                alert('✅ Question deleted successfully!');
+            }
+        }
+
+        function clearAllData() {
+            if (confirm('⚠️ Are you sure you want to clear all student data?\n\nThis will delete all results but keep the questions.\n\nThis action cannot be undone!')) {
+                appState.results    = [];
+                appState.allResults = [];   // also clear permanent history
+                saveToLocalStorage();
+                render();
+                alert('✅ All student data has been cleared!');
+            }
+        }
+
+        // ─── Main Render ───
+        function render() {
+            const app = document.getElementById('app');
+            switch(appState.currentScreen) {
+                case 'menu':
+                    app.innerHTML = renderMenu();
+                    const nameInput  = document.getElementById('studentName');
+                    const classInput = document.getElementById('studentClass');
+                    if (nameInput)  nameInput.addEventListener('input',  (e) => { appState.studentName  = e.target.value; });
+                    if (classInput) classInput.addEventListener('input', (e) => { appState.studentClass = e.target.value; });
+                    break;
+                case 'add':
+                    app.innerHTML = renderAddQuestion();
+                    break;
+                case 'manage':
+                    app.innerHTML = renderManageQuestions();
+                    break;
+                case 'edit':
+                    app.innerHTML = renderEditQuestion();
+                    break;
+                case 'play':
+                    app.innerHTML = renderPlayGame();
+                    break;
+                case 'report':
+                    app.innerHTML = renderReport();
+                    break;
+            }
+        }
+
+        // ─── Init ───
+        window.onload = function() {
+            loadFromLocalStorage();
+            render();
+        };
+    </script>
+</body>
+</html>
