@@ -3,9 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arrange the Word Game - English Learning</title>
+    <title>Arrange the Word Game - English Learning (Firebase)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <!-- Firebase SDK v9 (modular) -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase, ref, set, update, remove, onValue, push, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyATZctZe1-BxAJ81U6eZ9UwenW13dNQLfQ",
+            authDomain: "arrange-word.firebaseapp.com",
+            projectId: "arrange-word",
+            storageBucket: "arrange-word.firebasestorage.app",
+            messagingSenderId: "304807125230",
+            appId: "1:304807125230:web:fb5ee885917c5f628093ff"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        // Make Firebase available globally
+        window.firebaseDB = database;
+        window.firebaseRef = ref;
+        window.firebaseSet = set;
+        window.firebaseUpdate = update;
+        window.firebaseRemove = remove;
+        window.firebaseOnValue = onValue;
+        window.firebasePush = push;
+        window.firebaseGet = get;
+        window.firebaseInitialized = true;
+
+        console.log('✅ Firebase initialized successfully');
+    </script>
+
     <style>
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(20px); }
@@ -35,6 +69,45 @@
             pointer-events: none;
             z-index: 9999;
             user-select: none;
+        }
+
+        /* Firebase status indicator */
+        .firebase-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: #dcfce7;
+            color: #16a34a;
+            border: 1px solid #86efac;
+        }
+        .firebase-status.loading {
+            background: #fef3c7;
+            color: #d97706;
+            border-color: #fcd34d;
+        }
+        .firebase-status.error {
+            background: #fee2e2;
+            color: #dc2626;
+            border-color: #fca5a5;
+        }
+        .firebase-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
         /* Settings gear button */
@@ -74,6 +147,8 @@
             max-width: 420px;
             padding: 32px 28px 28px;
             position: relative;
+            max-height: 85vh;
+            overflow-y: auto;
         }
         .modal-close {
             position: absolute;
@@ -149,9 +224,15 @@
     </style>
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen">
+    <!-- Firebase Status Indicator -->
+    <div id="firebaseStatus" class="firebase-status loading">
+        <div class="firebase-dot"></div>
+        <span>Connecting...</span>
+    </div>
+
     <div id="app"></div>
 
-    <!-- Watermark (always visible) -->
+    <!-- Watermark -->
     <div class="watermark">✦ Created &amp; Developed by D.D Candra ✦</div>
 
     <!-- Settings Modal -->
@@ -180,7 +261,7 @@
                 </button>
             </div>
 
-            <!-- SETTINGS MENU (shown after login) -->
+            <!-- SETTINGS MENU -->
             <div id="settingsMenu" style="display:none;">
                 <div class="text-center mb-5">
                     <div style="font-size:34px; margin-bottom:2px;">⚙️</div>
@@ -230,7 +311,6 @@
                         <div class="item-label">Repeat Game</div>
                         <div class="item-sub">Allow students to repeat</div>
                     </div>
-                    <!-- Toggle switch -->
                     <div onclick="toggleRepeat()" style="position:relative;width:48px;height:26px;flex-shrink:0;cursor:pointer;">
                         <div id="repeatTrack" style="position:absolute;inset:0;border-radius:13px;background:#d1d5db;transition:background 0.25s;"></div>
                         <div id="repeatThumb" style="position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);transition:left 0.25s;"></div>
@@ -252,7 +332,7 @@
                 </button>
             </div>
 
-            <!-- HEADER EDIT PANEL (shown when editing title/subtitle) -->
+            <!-- HEADER EDIT PANEL -->
             <div id="headerEditPanel" style="display:none;">
                 <div class="text-center mb-4">
                     <div style="font-size:30px; margin-bottom:2px;">🎨</div>
@@ -279,6 +359,8 @@
                         ← Back
                     </button>
                 </div>
+            </div>
+
             <!-- STATISTICS PANEL -->
             <div id="statisticsPanel" style="display:none;">
                 <div class="text-center mb-5">
@@ -286,7 +368,6 @@
                     <h2 class="text-lg font-bold text-gray-800">Statistics</h2>
                 </div>
 
-                <!-- Stats cards -->
                 <div style="display:flex; gap:10px; margin-bottom:14px;">
                     <div style="flex:1; background:#eff6ff; border-radius:12px; padding:14px 10px; text-align:center; border:1.5px solid #bfdbfe;">
                         <div id="statQuestionsNum" style="font-size:28px; font-weight:700; color:#2563eb;">0</div>
@@ -302,14 +383,12 @@
                     </div>
                 </div>
 
-                <!-- Clear button (only visible when there is data) -->
                 <div id="statClearWrap" style="display:none; margin-bottom:10px;">
                     <button onclick="clearAllData(); openStatistics();" style="width:100%; padding:10px; background:#ef4444; color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;">
                         🗑️ Clear All Student Data
                     </button>
                 </div>
 
-                <!-- Back -->
                 <button onclick="backToSettingsMenu()" class="w-full py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium" style="border-radius:10px;">
                     ← Back
                 </button>
@@ -318,7 +397,127 @@
     </div>
 
     <script>
-        // ─── App State ───
+        // ═══════════════════════════════════════════════════════════════════
+        // FIREBASE INTEGRATION LAYER
+        // ═══════════════════════════════════════════════════════════════════
+
+        // Wait for Firebase to initialize
+        function waitForFirebase(callback) {
+            if (window.firebaseInitialized) {
+                callback();
+            } else {
+                setTimeout(() => waitForFirebase(callback), 100);
+            }
+        }
+
+        // Firebase Status Management
+        function setFirebaseStatus(status, message) {
+            const statusEl = document.getElementById('firebaseStatus');
+            statusEl.className = `firebase-status ${status}`;
+            statusEl.querySelector('span').textContent = message;
+        }
+
+        // Firebase Sync Functions
+        const FirebaseSync = {
+            // Sync questions to Firebase
+            syncQuestions: function() {
+                const questionsRef = window.firebaseRef(window.firebaseDB, 'questions');
+                const questionsObj = {};
+                appState.questions.forEach(q => {
+                    questionsObj[`question_${q.id}`] = q;
+                });
+                window.firebaseSet(questionsRef, questionsObj)
+                    .then(() => console.log('✅ Questions synced to Firebase'))
+                    .catch(err => console.error('❌ Sync error:', err));
+            },
+
+            // Sync settings to Firebase
+            syncSettings: function() {
+                const settingsRef = window.firebaseRef(window.firebaseDB, 'settings');
+                window.firebaseSet(settingsRef, {
+                    customTitle: appState.customTitle,
+                    customSubtitle: appState.customSubtitle,
+                    customIcon: appState.customIcon,
+                    repeatEnabled: appState.repeatEnabled
+                })
+                .then(() => console.log('✅ Settings synced to Firebase'))
+                .catch(err => console.error('❌ Settings sync error:', err));
+            },
+
+            // Push a new result to Firebase
+            pushResult: function(result) {
+                const resultsRef = window.firebaseRef(window.firebaseDB, 'results');
+                const newResultRef = window.firebasePush(resultsRef);
+                window.firebaseSet(newResultRef, result)
+                    .then(() => console.log('✅ Result saved to Firebase'))
+                    .catch(err => console.error('❌ Result save error:', err));
+            },
+
+            // Listen to questions changes
+            listenQuestions: function() {
+                const questionsRef = window.firebaseRef(window.firebaseDB, 'questions');
+                window.firebaseOnValue(questionsRef, (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        appState.questions = Object.values(data);
+                        console.log('🔄 Questions updated from Firebase:', appState.questions.length);
+                        render();
+                    } else {
+                        // No questions in Firebase yet - upload default ones
+                        FirebaseSync.syncQuestions();
+                    }
+                });
+            },
+
+            // Listen to settings changes
+            listenSettings: function() {
+                const settingsRef = window.firebaseRef(window.firebaseDB, 'settings');
+                window.firebaseOnValue(settingsRef, (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        appState.customTitle = data.customTitle || appState.customTitle;
+                        appState.customSubtitle = data.customSubtitle || appState.customSubtitle;
+                        appState.customIcon = data.customIcon || appState.customIcon;
+                        appState.repeatEnabled = data.repeatEnabled || false;
+                        console.log('🔄 Settings updated from Firebase');
+                        render();
+                        syncRepeatUI();
+                    }
+                });
+            },
+
+            // Listen to results changes
+            listenResults: function() {
+                const resultsRef = window.firebaseRef(window.firebaseDB, 'results');
+                window.firebaseOnValue(resultsRef, (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        appState.allResults = Object.values(data);
+                        console.log('🔄 Results updated from Firebase:', appState.allResults.length);
+                        render();
+                    }
+                });
+            },
+
+            // Clear all results from Firebase
+            clearAllResults: function() {
+                const resultsRef = window.firebaseRef(window.firebaseDB, 'results');
+                return window.firebaseSet(resultsRef, null);
+            },
+
+            // Initialize all Firebase listeners
+            initializeListeners: function() {
+                this.listenQuestions();
+                this.listenSettings();
+                this.listenResults();
+                setFirebaseStatus('', '🟢 Connected');
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════════
+        // APP STATE
+        // ═══════════════════════════════════════════════════════════════════
+
         let appState = {
             questions: [
                 {
@@ -350,17 +549,15 @@
             studentName: '',
             studentClass: '',
             results: [],
-            allResults: [],   // permanent history (never cleared by new game; used for one-name check)
+            allResults: [],
             formWords: '',
             formSentence: '',
             formImage: '📝',
             formScore: 10,
             editingQuestion: null,
-            // Custom header
             customTitle: 'Arrange the Word Game',
             customSubtitle: 'Learn English by arranging words into sentences!',
             customIcon: '🎯',
-            // Repeat permission flag
             repeatEnabled: false
         };
 
@@ -369,46 +566,10 @@
         const SETTINGS_PASS = '56789';
         let settingsUnlocked = false;
 
-        // ─── LocalStorage ───
-        function saveToLocalStorage() {
-            try {
-                localStorage.setItem('wordGameQuestions', JSON.stringify(appState.questions));
-                localStorage.setItem('wordGameResults', JSON.stringify(appState.results));
-                localStorage.setItem('wordGameAllResults', JSON.stringify(appState.allResults));
-                localStorage.setItem('wordGameHeader', JSON.stringify({
-                    title: appState.customTitle,
-                    subtitle: appState.customSubtitle,
-                    icon: appState.customIcon,
-                    repeatEnabled: appState.repeatEnabled
-                }));
-            } catch (e) {
-                console.error('Error saving to localStorage:', e);
-            }
-        }
+        // ═══════════════════════════════════════════════════════════════════
+        // UTILITY FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════
 
-        function loadFromLocalStorage() {
-            try {
-                const savedQuestions = localStorage.getItem('wordGameQuestions');
-                const savedResults = localStorage.getItem('wordGameResults');
-                const savedAllResults = localStorage.getItem('wordGameAllResults');
-                const savedHeader = localStorage.getItem('wordGameHeader');
-
-                if (savedQuestions)  appState.questions   = JSON.parse(savedQuestions);
-                if (savedResults)    appState.results     = JSON.parse(savedResults);
-                if (savedAllResults) appState.allResults  = JSON.parse(savedAllResults);
-                if (savedHeader) {
-                    const h = JSON.parse(savedHeader);
-                    if (h.title)    appState.customTitle    = h.title;
-                    if (h.subtitle) appState.customSubtitle = h.subtitle;
-                    if (h.icon)     appState.customIcon     = h.icon;
-                    if (typeof h.repeatEnabled === 'boolean') appState.repeatEnabled = h.repeatEnabled;
-                }
-            } catch (e) {
-                console.error('Error loading from localStorage:', e);
-            }
-        }
-
-        // ─── Utility ───
         function shuffleArray(array) {
             const newArray = [...array];
             for (let i = newArray.length - 1; i > 0; i--) {
@@ -418,14 +579,19 @@
             return newArray;
         }
 
-        // ─── Settings Modal Logic ───
+        function normaliseName(name) {
+            return name.trim().replace(/\s+/g, ' ').toLowerCase();
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SETTINGS MODAL
+        // ═══════════════════════════════════════════════════════════════════
+
         function openSettings() {
             document.getElementById('settingsModal').style.display = 'flex';
-            // Reset login fields
             document.getElementById('loginUser').value = '';
             document.getElementById('loginPass').value = '';
             document.getElementById('loginError').style.display = 'none';
-
             if (settingsUnlocked) {
                 showSettingsMenu();
             } else {
@@ -442,23 +608,23 @@
         }
 
         function showLoginScreen() {
-            document.getElementById('loginScreen').style.display   = 'block';
-            document.getElementById('settingsMenu').style.display  = 'none';
+            document.getElementById('loginScreen').style.display = 'block';
+            document.getElementById('settingsMenu').style.display = 'none';
             document.getElementById('headerEditPanel').style.display = 'none';
+            document.getElementById('statisticsPanel').style.display = 'none';
         }
 
         function showSettingsMenu() {
-            document.getElementById('loginScreen').style.display      = 'none';
-            document.getElementById('settingsMenu').style.display     = 'block';
-            document.getElementById('headerEditPanel').style.display  = 'none';
-            document.getElementById('statisticsPanel').style.display  = 'none';
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('settingsMenu').style.display = 'block';
+            document.getElementById('headerEditPanel').style.display = 'none';
+            document.getElementById('statisticsPanel').style.display = 'none';
             syncRepeatUI();
         }
 
         function attemptLogin() {
             const user = document.getElementById('loginUser').value.trim();
             const pass = document.getElementById('loginPass').value.trim();
-
             if (user === SETTINGS_USER && pass === SETTINGS_PASS) {
                 settingsUnlocked = true;
                 document.getElementById('loginError').style.display = 'none';
@@ -478,7 +644,7 @@
         // ─── Repeat Toggle ───
         function toggleRepeat() {
             appState.repeatEnabled = !appState.repeatEnabled;
-            saveToLocalStorage();
+            FirebaseSync.syncSettings(); // Sync to Firebase
             syncRepeatUI();
         }
 
@@ -495,59 +661,59 @@
             }
         }
 
-        // ─── Header Edit Panel ───
+        // ─── Header Edit ───
         function openHeaderEdit() {
-            document.getElementById('loginScreen').style.display     = 'none';
-            document.getElementById('settingsMenu').style.display    = 'none';
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('settingsMenu').style.display = 'none';
             document.getElementById('headerEditPanel').style.display = 'block';
-            document.getElementById('editTitle').value    = appState.customTitle;
+            document.getElementById('statisticsPanel').style.display = 'none';
+            document.getElementById('editTitle').value = appState.customTitle;
             document.getElementById('editSubtitle').value = appState.customSubtitle;
-            document.getElementById('editIcon').value     = appState.customIcon;
+            document.getElementById('editIcon').value = appState.customIcon;
         }
 
         function backToSettingsMenu() {
             showSettingsMenu();
         }
 
-        // ─── Statistics Panel ───
-        function openStatistics() {
-            document.getElementById('loginScreen').style.display      = 'none';
-            document.getElementById('settingsMenu').style.display     = 'none';
-            document.getElementById('headerEditPanel').style.display  = 'none';
-            document.getElementById('statisticsPanel').style.display  = 'block';
-
-            // Live numbers
-            const uniqueNames = new Set(appState.allResults.map(r => normaliseName(r.studentName)));
-            document.getElementById('statQuestionsNum').textContent = appState.questions.length;
-            document.getElementById('statAttemptsNum').textContent  = appState.allResults.length;
-            document.getElementById('statNamesNum').textContent     = uniqueNames.size;
-
-            // Show/hide clear button
-            document.getElementById('statClearWrap').style.display = appState.allResults.length > 0 ? 'block' : 'none';
-        }
-
         function saveHeaderEdit() {
             const t = document.getElementById('editTitle').value.trim();
             const s = document.getElementById('editSubtitle').value.trim();
             const i = document.getElementById('editIcon').value.trim();
-            if (t) appState.customTitle    = t;
+            if (t) appState.customTitle = t;
             if (s) appState.customSubtitle = s;
-            if (i) appState.customIcon     = i;
-            saveToLocalStorage();
+            if (i) appState.customIcon = i;
+            FirebaseSync.syncSettings(); // Sync to Firebase
             closeSettings();
             render();
         }
 
-        // ─── PDF Download ───
+        // ─── Statistics ───
+        function openStatistics() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('settingsMenu').style.display = 'none';
+            document.getElementById('headerEditPanel').style.display = 'none';
+            document.getElementById('statisticsPanel').style.display = 'block';
+
+            const uniqueNames = new Set(appState.allResults.map(r => normaliseName(r.studentName)));
+            document.getElementById('statQuestionsNum').textContent = appState.questions.length;
+            document.getElementById('statAttemptsNum').textContent = appState.allResults.length;
+            document.getElementById('statNamesNum').textContent = uniqueNames.size;
+            document.getElementById('statClearWrap').style.display = appState.allResults.length > 0 ? 'block' : 'none';
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // PDF DOWNLOAD
+        // ═══════════════════════════════════════════════════════════════════
+
         function downloadPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
 
             const totalScore = appState.results.reduce((sum, r) => sum + (r.isCorrect ? r.score : 0), 0);
-            const maxScore   = appState.results.reduce((sum, r) => sum + r.score, 0);
+            const maxScore = appState.results.reduce((sum, r) => sum + r.score, 0);
             const percentage = maxScore > 0 ? ((totalScore / maxScore) * 100).toFixed(1) : 0;
 
-            // Header – use custom title
             doc.setFontSize(20);
             doc.setTextColor(79, 70, 229);
             doc.text('STUDENT REPORT', 105, 20, { align: 'center' });
@@ -576,11 +742,9 @@
 
             appState.results.forEach((result, index) => {
                 if (yPos > 270) { doc.addPage(); yPos = 20; }
-
                 doc.setFont(undefined, 'bold');
                 doc.text(`Question ${index + 1}: (${result.score} points)`, 20, yPos);
                 yPos += 7;
-
                 doc.setFont(undefined, 'normal');
                 if (result.isCorrect) {
                     doc.setTextColor(0, 128, 0);
@@ -591,12 +755,10 @@
                 }
                 doc.setTextColor(0, 0, 0);
                 yPos += 7;
-
                 doc.text(`Correct Answer: ${result.question}`, 25, yPos);
                 yPos += 7;
                 doc.text(`Student Answer: ${result.userAnswer}`, 25, yPos);
                 yPos += 7;
-
                 doc.setFontSize(8);
                 doc.setTextColor(128, 128, 128);
                 doc.text(`Time: ${result.timestamp}`, 25, yPos);
@@ -605,7 +767,6 @@
                 yPos += 10;
             });
 
-            // Footer with watermark on every page
             const pageCount = doc.internal.getNumberOfPages();
             for (let i = 1; i <= pageCount; i++) {
                 doc.setPage(i);
@@ -620,13 +781,14 @@
             doc.save(`${appState.studentName}_Report_${Date.now()}.pdf`);
         }
 
-        // ─── Render: Menu ───
+        // ═══════════════════════════════════════════════════════════════════
+        // RENDER FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════
+
         function renderMenu() {
             return `
                 <div class="max-w-4xl mx-auto p-6 fade-in">
                     <div class="bg-white rounded-2xl shadow-xl p-8">
-
-                        <!-- Title row with gear icon -->
                         <div class="flex items-center justify-center gap-2 mb-2">
                             <h1 class="text-4xl font-bold text-center text-blue-600">
                                 ${appState.customIcon} ${appState.customTitle}
@@ -635,49 +797,35 @@
                         </div>
                         <p class="text-center text-gray-600 mb-8">${appState.customSubtitle}</p>
 
-                        <!-- Student info fields -->
                         <div class="mb-6">
                             <label class="block text-sm font-medium mb-2">Student Name:</label>
-                            <input
-                                type="text"
-                                id="studentName"
-                                value="${appState.studentName}"
+                            <input type="text" id="studentName" value="${appState.studentName}"
                                 class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter your name"
-                            />
+                                placeholder="Enter your name" />
                         </div>
 
                         <div class="mb-6">
                             <label class="block text-sm font-medium mb-2">Class:</label>
-                            <input
-                                type="text"
-                                id="studentClass"
-                                value="${appState.studentClass}"
+                            <input type="text" id="studentClass" value="${appState.studentClass}"
                                 class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter your class (e.g., 5A, 6B)"
-                            />
+                                placeholder="Enter your class (e.g., 5A, 6B)" />
                         </div>
 
-                        <!-- Only Start Game button on main menu -->
                         <div class="mb-8">
                             <button onclick="startGame()" class="w-full flex items-center justify-center gap-2 bg-green-500 text-white px-6 py-4 rounded-xl hover:bg-green-600 transition-colors font-semibold text-lg">
                                 ▶️ Start Game
                             </button>
                         </div>
-
-
                     </div>
                 </div>
             `;
         }
 
-        // ─── Render: Add Question ───
         function renderAddQuestion() {
             return `
                 <div class="max-w-2xl mx-auto p-6 fade-in">
                     <div class="bg-white rounded-2xl shadow-xl p-8">
                         <h2 class="text-3xl font-bold mb-6 text-purple-600">➕ Add New Question</h2>
-
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium mb-2">Words (separate with commas):</label>
@@ -717,13 +865,11 @@
             `;
         }
 
-        // ─── Render: Manage Questions ───
         function renderManageQuestions() {
             return `
                 <div class="max-w-4xl mx-auto p-6 fade-in">
                     <div class="bg-white rounded-2xl shadow-xl p-8">
                         <h2 class="text-3xl font-bold mb-6 text-orange-600">📝 Manage Questions</h2>
-
                         <div class="space-y-4">
                             ${appState.questions.map((q, index) => `
                                 <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -746,7 +892,6 @@
                                 </div>
                             `).join('')}
                         </div>
-
                         <button onclick="changeScreen('menu')" class="mt-6 w-full bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors font-semibold">
                             Back to Menu
                         </button>
@@ -755,13 +900,11 @@
             `;
         }
 
-        // ─── Render: Edit Question ───
         function renderEditQuestion() {
             return `
                 <div class="max-w-2xl mx-auto p-6 fade-in">
                     <div class="bg-white rounded-2xl shadow-xl p-8">
                         <h2 class="text-3xl font-bold mb-6 text-blue-600">✏️ Edit Question</h2>
-
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium mb-2">Words (separate with commas):</label>
@@ -798,7 +941,6 @@
             `;
         }
 
-        // ─── Render: Play Game ───
         function renderPlayGame() {
             const question = appState.questions[appState.currentQuestion];
             return `
@@ -808,9 +950,7 @@
                             <h2 class="text-2xl font-bold text-green-600">
                                 Question ${appState.currentQuestion + 1} of ${appState.questions.length}
                             </h2>
-                            <button onclick="changeScreen('menu')" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">
-                                Exit
-                            </button>
+                            <button onclick="changeScreen('menu')" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">Exit</button>
                         </div>
 
                         <div class="text-center mb-8">
@@ -848,25 +988,21 @@
             `;
         }
 
-        // ─── Render: Report ───
         function renderReport() {
             const totalScore = appState.results.reduce((sum, r) => sum + (r.isCorrect ? r.score : 0), 0);
-            const maxScore   = appState.results.reduce((sum, r) => sum + r.score, 0);
+            const maxScore = appState.results.reduce((sum, r) => sum + r.score, 0);
             const percentage = maxScore > 0 ? ((totalScore / maxScore) * 100).toFixed(1) : 0;
 
             if (appState.results.length === 0) {
                 return `
                     <div class="max-w-4xl mx-auto p-6 fade-in">
                         <div class="bg-white rounded-2xl shadow-xl p-8">
-                            <!-- Use custom title in report header -->
                             <h2 class="text-3xl font-bold mb-2 text-indigo-600">${appState.customIcon} ${appState.customTitle}</h2>
                             <p class="text-gray-500 mb-6">${appState.customSubtitle}</p>
                             <h3 class="text-xl font-bold text-indigo-600 mb-4">📊 Student Report</h3>
                             <div class="text-center py-12">
                                 <p class="text-xl text-gray-500 mb-6">No results yet. Play the game first!</p>
-                                <button onclick="changeScreen('menu')" class="bg-indigo-500 text-white px-6 py-3 rounded-lg hover:bg-indigo-600">
-                                    Back to Menu
-                                </button>
+                                <button onclick="changeScreen('menu')" class="bg-indigo-500 text-white px-6 py-3 rounded-lg hover:bg-indigo-600">Back to Menu</button>
                             </div>
                         </div>
                     </div>
@@ -876,7 +1012,6 @@
             return `
                 <div class="max-w-4xl mx-auto p-6 fade-in">
                     <div class="bg-white rounded-2xl shadow-xl p-8">
-                        <!-- Custom header on report page -->
                         <h2 class="text-3xl font-bold mb-1 text-indigo-600">${appState.customIcon} ${appState.customTitle}</h2>
                         <p class="text-gray-500 mb-5">${appState.customSubtitle}</p>
                         <h3 class="text-xl font-bold text-indigo-600 mb-4">📊 Student Report</h3>
@@ -924,21 +1059,19 @@
             `;
         }
 
-        // ─── Action Handlers ───
+        // ═══════════════════════════════════════════════════════════════════
+        // ACTION HANDLERS
+        // ═══════════════════════════════════════════════════════════════════
+
         function changeScreen(screen) {
             appState.currentScreen = screen;
             render();
         }
 
-        // ─── Name normalisation helper (trim + collapse spaces + lowercase) ───
-        function normaliseName(name) {
-            return name.trim().replace(/\s+/g, ' ').toLowerCase();
-        }
-
         function startGame() {
-            const nameInput  = document.getElementById('studentName');
+            const nameInput = document.getElementById('studentName');
             const classInput = document.getElementById('studentClass');
-            if (nameInput)  appState.studentName  = nameInput.value;
+            if (nameInput) appState.studentName = nameInput.value;
             if (classInput) appState.studentClass = classInput.value;
 
             if (!appState.studentName.trim()) {
@@ -950,19 +1083,12 @@
                 return;
             }
 
-            // ─── One-name-one-chance check ───
+            // One-name-one-chance check
             const currentNorm = normaliseName(appState.studentName);
-
-            // Collect all unique normalised names that have already played (from ALL saved results)
-            const playedNames = [...new Set(
-                appState.allResults
-                    .map(r => normaliseName(r.studentName))
-            )];
+            const playedNames = [...new Set(appState.allResults.map(r => normaliseName(r.studentName)))];
 
             if (playedNames.includes(currentNorm)) {
-                // Name already exists in history
                 if (!appState.repeatEnabled) {
-                    // Repeat is OFF  → block
                     alert(
                         '🚫 Nama "' + appState.studentName.trim() + '" sudah pernah mengerjakan game ini.\n\n' +
                         'Setiap siswa hanya boleh mengerjakan 1x.\n' +
@@ -970,11 +1096,10 @@
                     );
                     return;
                 }
-                // Repeat is ON → allow, no block
             }
 
             appState.currentQuestion = 0;
-            appState.results = [];          // session results (for current play)
+            appState.results = [];
             appState.selectedWords = [];
             appState.availableWords = shuffleArray(appState.questions[0].words);
             appState.currentScreen = 'play';
@@ -994,7 +1119,7 @@
         }
 
         function updateGameDisplay() {
-            const selectedArea  = document.getElementById('selectedWordsArea');
+            const selectedArea = document.getElementById('selectedWordsArea');
             const availableArea = document.getElementById('availableWordsArea');
 
             if (selectedArea) {
@@ -1020,24 +1145,24 @@
                 return;
             }
 
-            const userAnswer    = appState.selectedWords.join(' ');
+            const userAnswer = appState.selectedWords.join(' ');
             const correctAnswer = appState.questions[appState.currentQuestion].correctSentence;
             const questionScore = appState.questions[appState.currentQuestion].score;
-            const isCorrect     = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+            const isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
 
             const result = {
-                studentName:    appState.studentName,
+                studentName: appState.studentName,
+                studentClass: appState.studentClass,
                 questionNumber: appState.currentQuestion + 1,
-                question:       correctAnswer,
-                userAnswer:     userAnswer,
-                isCorrect:      isCorrect,
-                score:          questionScore,
-                timestamp:      new Date().toLocaleString()
+                question: correctAnswer,
+                userAnswer: userAnswer,
+                isCorrect: isCorrect,
+                score: questionScore,
+                timestamp: new Date().toLocaleString()
             };
 
             appState.results.push(result);
-            appState.allResults.push(result);   // permanent history for one-name check
-            saveToLocalStorage();
+            FirebaseSync.pushResult(result); // Save to Firebase
 
             if (isCorrect) {
                 alert(`🎉 Correct! Well done! You earned ${questionScore} points!`);
@@ -1047,12 +1172,12 @@
 
             if (appState.currentQuestion < appState.questions.length - 1) {
                 appState.currentQuestion++;
-                appState.selectedWords  = [];
+                appState.selectedWords = [];
                 appState.availableWords = shuffleArray(appState.questions[appState.currentQuestion].words);
                 render();
             } else {
                 const totalScore = appState.results.reduce((sum, r) => sum + (r.isCorrect ? r.score : 0), 0);
-                const maxScore   = appState.results.reduce((sum, r) => sum + r.score, 0);
+                const maxScore = appState.results.reduce((sum, r) => sum + r.score, 0);
                 alert(`🎊 Game completed!\n\nYour Total Score: ${totalScore} / ${maxScore}\n\nCheck the report for details.`);
                 appState.currentScreen = 'report';
                 render();
@@ -1060,15 +1185,15 @@
         }
 
         function handleAddQuestion() {
-            const wordsInput    = document.getElementById('formWords');
+            const wordsInput = document.getElementById('formWords');
             const sentenceInput = document.getElementById('formSentence');
-            const imageInput    = document.getElementById('formImage');
-            const scoreInput    = document.getElementById('formScore');
+            const imageInput = document.getElementById('formImage');
+            const scoreInput = document.getElementById('formScore');
 
-            if (wordsInput)    appState.formWords    = wordsInput.value;
+            if (wordsInput) appState.formWords = wordsInput.value;
             if (sentenceInput) appState.formSentence = sentenceInput.value;
-            if (imageInput)    appState.formImage    = imageInput.value;
-            if (scoreInput)    appState.formScore    = parseInt(scoreInput.value) || 10;
+            if (imageInput) appState.formImage = imageInput.value;
+            if (scoreInput) appState.formScore = parseInt(scoreInput.value) || 10;
 
             if (!appState.formWords.trim() || !appState.formSentence.trim()) {
                 alert('Please fill in all required fields!');
@@ -1076,19 +1201,21 @@
             }
 
             const wordsArray = appState.formWords.split(',').map(w => w.trim()).filter(w => w);
-            appState.questions.push({
+            const newQuestion = {
                 id: Date.now(),
                 words: wordsArray,
                 correctSentence: appState.formSentence,
                 image: appState.formImage,
                 score: appState.formScore
-            });
+            };
 
-            saveToLocalStorage();
-            appState.formWords    = '';
+            appState.questions.push(newQuestion);
+            FirebaseSync.syncQuestions(); // Sync to Firebase
+
+            appState.formWords = '';
             appState.formSentence = '';
-            appState.formImage    = '📝';
-            appState.formScore    = 10;
+            appState.formImage = '📝';
+            appState.formScore = 10;
             alert('✅ Question added successfully!');
             changeScreen('menu');
         }
@@ -1097,25 +1224,25 @@
             const question = appState.questions.find(q => q.id === questionId);
             if (question) {
                 appState.editingQuestion = question;
-                appState.formWords       = question.words.join(', ');
-                appState.formSentence    = question.correctSentence;
-                appState.formImage       = question.image;
-                appState.formScore       = question.score || 10;
-                appState.currentScreen   = 'edit';
+                appState.formWords = question.words.join(', ');
+                appState.formSentence = question.correctSentence;
+                appState.formImage = question.image;
+                appState.formScore = question.score || 10;
+                appState.currentScreen = 'edit';
                 render();
             }
         }
 
         function handleUpdateQuestion() {
-            const wordsInput    = document.getElementById('formWords');
+            const wordsInput = document.getElementById('formWords');
             const sentenceInput = document.getElementById('formSentence');
-            const imageInput    = document.getElementById('formImage');
-            const scoreInput    = document.getElementById('formScore');
+            const imageInput = document.getElementById('formImage');
+            const scoreInput = document.getElementById('formScore');
 
-            if (wordsInput)    appState.formWords    = wordsInput.value;
+            if (wordsInput) appState.formWords = wordsInput.value;
             if (sentenceInput) appState.formSentence = sentenceInput.value;
-            if (imageInput)    appState.formImage    = imageInput.value;
-            if (scoreInput)    appState.formScore    = parseInt(scoreInput.value) || 10;
+            if (imageInput) appState.formImage = imageInput.value;
+            if (scoreInput) appState.formScore = parseInt(scoreInput.value) || 10;
 
             if (!appState.formWords.trim() || !appState.formSentence.trim()) {
                 alert('Please fill in all required fields!');
@@ -1129,12 +1256,13 @@
                     : q
             );
 
-            saveToLocalStorage();
+            FirebaseSync.syncQuestions(); // Sync to Firebase
+
             appState.editingQuestion = null;
-            appState.formWords       = '';
-            appState.formSentence    = '';
-            appState.formImage       = '📝';
-            appState.formScore       = 10;
+            appState.formWords = '';
+            appState.formSentence = '';
+            appState.formImage = '📝';
+            appState.formScore = 10;
             alert('✅ Question updated successfully!');
             changeScreen('menu');
         }
@@ -1142,7 +1270,7 @@
         function deleteQuestion(questionId) {
             if (confirm('Are you sure you want to delete this question?')) {
                 appState.questions = appState.questions.filter(q => q.id !== questionId);
-                saveToLocalStorage();
+                FirebaseSync.syncQuestions(); // Sync to Firebase
                 render();
                 alert('✅ Question deleted successfully!');
             }
@@ -1150,23 +1278,27 @@
 
         function clearAllData() {
             if (confirm('⚠️ Are you sure you want to clear all student data?\n\nThis will delete all results but keep the questions.\n\nThis action cannot be undone!')) {
-                appState.results    = [];
-                appState.allResults = [];   // also clear permanent history
-                saveToLocalStorage();
-                render();
-                alert('✅ All student data has been cleared!');
+                appState.results = [];
+                appState.allResults = [];
+                FirebaseSync.clearAllResults().then(() => {
+                    render();
+                    alert('✅ All student data has been cleared!');
+                });
             }
         }
 
-        // ─── Main Render ───
+        // ═══════════════════════════════════════════════════════════════════
+        // MAIN RENDER
+        // ═══════════════════════════════════════════════════════════════════
+
         function render() {
             const app = document.getElementById('app');
             switch(appState.currentScreen) {
                 case 'menu':
                     app.innerHTML = renderMenu();
-                    const nameInput  = document.getElementById('studentName');
+                    const nameInput = document.getElementById('studentName');
                     const classInput = document.getElementById('studentClass');
-                    if (nameInput)  nameInput.addEventListener('input',  (e) => { appState.studentName  = e.target.value; });
+                    if (nameInput) nameInput.addEventListener('input', (e) => { appState.studentName = e.target.value; });
                     if (classInput) classInput.addEventListener('input', (e) => { appState.studentClass = e.target.value; });
                     break;
                 case 'add':
@@ -1187,10 +1319,19 @@
             }
         }
 
-        // ─── Init ───
+        // ═══════════════════════════════════════════════════════════════════
+        // INITIALIZATION
+        // ═══════════════════════════════════════════════════════════════════
+
         window.onload = function() {
-            loadFromLocalStorage();
-            render();
+            console.log('🚀 App starting...');
+            setFirebaseStatus('loading', 'Connecting to Firebase...');
+            
+            waitForFirebase(() => {
+                console.log('✅ Firebase ready, initializing listeners...');
+                FirebaseSync.initializeListeners();
+                render();
+            });
         };
     </script>
 </body>
