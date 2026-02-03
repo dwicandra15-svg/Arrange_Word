@@ -3,16 +3,150 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arrange the Word Game - English Learning (Firebase)</title>
+    <title>Arrange Word Game - Firestore</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
-    <!-- Firebase SDK v9 (modular) -->
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getDatabase, ref, set, update, remove, onValue, push, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+    <!-- Firebase SDK v9 Compat - FIRESTORE -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <style>
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        
+        .watermark {
+            position: fixed; bottom: 58px; left: 0; width: 100%; text-align: center;
+            font-size: 16px; color: rgba(120, 120, 148, 0.75); font-style: italic;
+            letter-spacing: 1px; pointer-events: none; z-index: 9999; user-select: none;
+        }
 
-        // Firebase Configuration
+        .firebase-status {
+            position: fixed; top: 10px; right: 10px; padding: 8px 14px; border-radius: 20px;
+            font-size: 12px; font-weight: 600; z-index: 10000; display: flex; align-items: center;
+            gap: 8px; background: #fef3c7; color: #d97706; border: 1.5px solid #fcd34d;
+        }
+        .firebase-status.connected { background: #dcfce7; color: #16a34a; border-color: #86efac; }
+        .firebase-status.error { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+
+        .gear-btn {
+            background: none; border: none; cursor: pointer; font-size: 26px; color: #6b7280;
+            transition: color 0.2s, transform 0.2s; line-height: 1; padding: 2px 6px; border-radius: 8px;
+        }
+        .gear-btn:hover { color: #3b82f6; transform: rotate(18deg); background: #e0e7ff; }
+
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .modal-box {
+            background: #fff; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+            width: 90%; max-width: 420px; padding: 32px 28px 28px; position: relative; max-height: 85vh; overflow-y: auto;
+        }
+        .modal-close {
+            position: absolute; top: 14px; right: 18px; background: none; border: none;
+            font-size: 22px; color: #9ca3af; cursor: pointer;
+        }
+
+        .settings-item {
+            display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 12px;
+            cursor: pointer; border: 1.5px solid #e5e7eb; background: #fafafa; margin-bottom: 10px;
+        }
+        .settings-item:hover { border-color: #60a5fa; background: #eff6ff; }
+        .settings-item .icon-circle {
+            width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; font-size: 20px;
+        }
+        .settings-item .item-label { font-weight: 600; font-size: 15px; color: #1f2937; }
+        .settings-item .item-sub { font-size: 12px; color: #6b7280; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen">
+    <div id="firebaseStatus" class="firebase-status">🔄 Connecting...</div>
+    <div id="app"></div>
+    <div class="watermark">✦ Created &amp; Developed by D.D Candra ✦</div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" style="display:none;" class="modal-overlay" onclick="if(event.target.id==='settingsModal') closeSettings()">
+        <div class="modal-box">
+            <button class="modal-close" onclick="closeSettings()">✕</button>
+            
+            <div id="loginScreen">
+                <div class="text-center mb-5">
+                    <div style="font-size:38px;">⚙️</div>
+                    <h2 class="text-xl font-bold">Settings</h2>
+                    <p class="text-sm text-gray-500 mt-1">Login required</p>
+                </div>
+                <input type="text" id="loginUser" placeholder="Username" class="w-full px-4 py-3 mb-3 border rounded-lg" />
+                <input type="password" id="loginPass" placeholder="Password" class="w-full px-4 py-3 mb-3 border rounded-lg" onkeydown="if(event.key==='Enter') attemptLogin()" />
+                <div id="loginError" class="text-red-500 text-sm text-center mb-3" style="display:none;">Invalid!</div>
+                <button onclick="attemptLogin()" class="w-full py-3 bg-blue-500 text-white rounded-lg font-semibold">🔓 Login</button>
+            </div>
+
+            <div id="settingsMenu" style="display:none;">
+                <div class="text-center mb-5">
+                    <div style="font-size:34px;">⚙️</div>
+                    <h2 class="text-xl font-bold">Settings</h2>
+                </div>
+                
+                <div class="settings-item" onclick="openHeaderEdit()">
+                    <div class="icon-circle" style="background:#ede9fe;">🎨</div>
+                    <div><div class="item-label">Header / Logo</div><div class="item-sub">Edit title & subtitle</div></div>
+                </div>
+                
+                <div class="settings-item" onclick="goSecure('report')">
+                    <div class="icon-circle" style="background:#dbeafe;">📊</div>
+                    <div><div class="item-label">View Report</div><div class="item-sub">All students</div></div>
+                </div>
+                <div class="settings-item" onclick="goSecure('add')">
+                    <div class="icon-circle" style="background:#ede9fe;">➕</div>
+                    <div><div class="item-label">Add Question</div></div>
+                </div>
+                <div class="settings-item" onclick="goSecure('manage')">
+                    <div class="icon-circle" style="background:#fff7ed;">✏️</div>
+                    <div><div class="item-label">Manage Questions</div></div>
+                </div>
+                <div class="settings-item" style="cursor:default;" onclick="event.stopPropagation();">
+                    <div class="icon-circle" style="background:#dcfce7;">🔁</div>
+                    <div style="flex:1;"><div class="item-label">Repeat Game</div></div>
+                    <div onclick="toggleRepeat()" style="position:relative;width:48px;height:26px;cursor:pointer;">
+                        <div id="repeatTrack" style="position:absolute;inset:0;border-radius:13px;background:#d1d5db;transition:0.25s;"></div>
+                        <div id="repeatThumb" style="position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);transition:0.25s;"></div>
+                    </div>
+                </div>
+                <button onclick="clearAllData()" class="w-full mt-4 py-2 bg-red-500 text-white rounded-lg font-semibold">🗑️ Clear All Data</button>
+                <button onclick="closeSettings()" class="w-full mt-2 py-2 bg-gray-100 text-gray-600 rounded-lg">Close</button>
+            </div>
+            
+            <div id="headerEditPanel" style="display:none;">
+                <div class="text-center mb-4">
+                    <div style="font-size:30px;">🎨</div>
+                    <h2 class="text-lg font-bold">Header Edit</h2>
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-medium mb-1">Title</label>
+                    <input type="text" id="editTitle" class="w-full px-4 py-3 border rounded-lg">
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-medium mb-1">Subtitle</label>
+                    <input type="text" id="editSubtitle" class="w-full px-4 py-3 border rounded-lg">
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-medium mb-1">Icon (emoji)</label>
+                    <input type="text" id="editIcon" class="w-full px-4 py-3 border rounded-lg">
+                </div>
+                <div class="flex gap-3 mt-5">
+                    <button onclick="saveHeaderEdit()" class="flex-1 py-2 bg-purple-500 text-white rounded-lg font-semibold">💾 Save</button>
+                    <button onclick="backToSettingsMenu()" class="flex-1 py-2 bg-gray-200 text-gray-600 rounded-lg">← Back</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        console.log('🚀 App initializing with FIRESTORE...');
+
+        // Firebase Config
         const firebaseConfig = {
             apiKey: "AIzaSyATZctZe1-BxAJ81U6eZ9UwenW13dNQLfQ",
             authDomain: "arrange-word.firebaseapp.com",
@@ -22,561 +156,29 @@
             appId: "1:304807125230:web:fb5ee885917c5f628093ff"
         };
 
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const database = getDatabase(app);
+        let db = null;
+        let firebaseReady = false;
 
-        // Make Firebase available globally
-        window.firebaseDB = database;
-        window.firebaseRef = ref;
-        window.firebaseSet = set;
-        window.firebaseUpdate = update;
-        window.firebaseRemove = remove;
-        window.firebaseOnValue = onValue;
-        window.firebasePush = push;
-        window.firebaseGet = get;
-        window.firebaseInitialized = true;
-
-        console.log('✅ Firebase initialized successfully');
-    </script>
-
-    <style>
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .fade-in {
-            animation: fadeIn 0.5s ease-in;
-        }
-        .smooth-transition {
-            transition: all 0.2s ease-in-out;
-        }
-        #selectedWordsArea, #availableWordsArea {
-            transition: none;
+        // Initialize Firebase with FIRESTORE
+        try {
+            console.log('🔥 Initializing Firebase with Firestore...');
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+            firebaseReady = true;
+            console.log('✅ Firestore initialized');
+            setStatus('connected', '🟢 Connected');
+        } catch (error) {
+            console.error('❌ Firebase init error:', error);
+            setStatus('error', '❌ Connection Failed');
+            alert(`Firebase Error:\n\n${error.message}\n\nPastikan Firestore sudah enabled!`);
         }
 
-        /* Watermark */
-        .watermark {
-            position: fixed;
-            bottom: 58px;
-            left: 0;
-            width: 100%;
-            text-align: center;
-            font-size: 16px;
-            color: rgba(120, 120, 148, 0.75);
-            font-style: italic;
-            letter-spacing: 1px;
-            pointer-events: none;
-            z-index: 9999;
-            user-select: none;
-        }
-
-        /* Firebase status indicator */
-        .firebase-status {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-            z-index: 10000;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: #dcfce7;
-            color: #16a34a;
-            border: 1px solid #86efac;
-        }
-        .firebase-status.loading {
-            background: #fef3c7;
-            color: #d97706;
-            border-color: #fcd34d;
-        }
-        .firebase-status.error {
-            background: #fee2e2;
-            color: #dc2626;
-            border-color: #fca5a5;
-        }
-        .firebase-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: currentColor;
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        /* Settings gear button */
-        .gear-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 26px;
-            color: #6b7280;
-            transition: color 0.2s, transform 0.2s;
-            line-height: 1;
-            padding: 2px 6px;
-            border-radius: 8px;
-        }
-        .gear-btn:hover {
-            color: #3b82f6;
-            transform: rotate(18deg);
-            background: #e0e7ff;
-        }
-
-        /* Modal overlay */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.45);
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            animation: fadeIn 0.25s ease;
-        }
-        .modal-box {
-            background: #fff;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
-            width: 90%;
-            max-width: 420px;
-            padding: 32px 28px 28px;
-            position: relative;
-            max-height: 85vh;
-            overflow-y: auto;
-        }
-        .modal-close {
-            position: absolute;
-            top: 14px; right: 18px;
-            background: none; border: none;
-            font-size: 22px; color: #9ca3af; cursor: pointer;
-            transition: color 0.2s;
-        }
-        .modal-close:hover { color: #ef4444; }
-
-        /* Settings menu items */
-        .settings-item {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            padding: 14px 18px;
-            border-radius: 12px;
-            cursor: pointer;
-            border: 1.5px solid #e5e7eb;
-            transition: all 0.18s;
-            background: #fafafa;
-            margin-bottom: 10px;
-        }
-        .settings-item:hover {
-            border-color: #60a5fa;
-            background: #eff6ff;
-            box-shadow: 0 2px 8px rgba(59,130,246,0.15);
-        }
-        .settings-item .icon-circle {
-            width: 42px; height: 42px;
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 20px;
-            flex-shrink: 0;
-        }
-        .settings-item .item-label {
-            font-weight: 600;
-            font-size: 15px;
-            color: #1f2937;
-        }
-        .settings-item .item-sub {
-            font-size: 12px;
-            color: #6b7280;
-            margin-top: 1px;
-        }
-
-        /* Login input */
-        .login-input {
-            width: 100%;
-            padding: 10px 14px;
-            border: 1.5px solid #d1d5db;
-            border-radius: 10px;
-            font-size: 15px;
-            outline: none;
-            transition: border 0.2s;
-            box-sizing: border-box;
-        }
-        .login-input:focus { border-color: #60a5fa; }
-        .login-input::placeholder { color: #9ca3af; }
-
-        /* Header edit inputs */
-        .header-input {
-            width: 100%;
-            padding: 9px 12px;
-            border: 1.5px solid #d1d5db;
-            border-radius: 8px;
-            font-size: 14px;
-            outline: none;
-            transition: border 0.2s;
-            box-sizing: border-box;
-        }
-        .header-input:focus { border-color: #a78bfa; }
-    </style>
-</head>
-<body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen">
-    <!-- Firebase Status Indicator -->
-    <div id="firebaseStatus" class="firebase-status loading">
-        <div class="firebase-dot"></div>
-        <span>Connecting...</span>
-    </div>
-
-    <div id="app"></div>
-
-    <!-- Watermark -->
-    <div class="watermark">✦ Created &amp; Developed by D.D Candra ✦</div>
-
-    <!-- Settings Modal -->
-    <div id="settingsModal" style="display:none;" class="modal-overlay" onclick="closeSettingsOnOverlay(event)">
-        <div class="modal-box" id="settingsBox">
-            <button class="modal-close" onclick="closeSettings()">✕</button>
-
-            <!-- LOGIN SCREEN -->
-            <div id="loginScreen">
-                <div class="text-center mb-5">
-                    <div style="font-size:38px; margin-bottom:4px;">⚙️</div>
-                    <h2 class="text-xl font-bold text-gray-800">Settings</h2>
-                    <p class="text-sm text-gray-500 mt-1">Login required to access</p>
-                </div>
-                <div class="mb-3">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                    <input type="text" id="loginUser" class="login-input" placeholder="Enter username" autocomplete="off">
-                </div>
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                    <input type="password" id="loginPass" class="login-input" placeholder="Enter password" autocomplete="off" onkeydown="if(event.key==='Enter') attemptLogin()">
-                </div>
-                <div id="loginError" class="text-red-500 text-sm text-center mb-3" style="display:none; min-height:18px;">Invalid username or password!</div>
-                <button onclick="attemptLogin()" class="w-full py-2.5 bg-blue-500 text-white rounded-10 font-semibold text-base hover:bg-blue-600 transition-colors" style="border-radius:10px;">
-                    🔓 Login
-                </button>
-            </div>
-
-            <!-- SETTINGS MENU -->
-            <div id="settingsMenu" style="display:none;">
-                <div class="text-center mb-5">
-                    <div style="font-size:34px; margin-bottom:2px;">⚙️</div>
-                    <h2 class="text-xl font-bold text-gray-800">Settings</h2>
-                </div>
-
-                <!-- Header / Logo Edit -->
-                <div class="settings-item" onclick="openHeaderEdit()">
-                    <div class="icon-circle" style="background:#ede9fe;">🎨</div>
-                    <div>
-                        <div class="item-label">Header / Logo</div>
-                        <div class="item-sub">Edit title & subtitle</div>
-                    </div>
-                </div>
-
-                <!-- View Report -->
-                <div class="settings-item" onclick="goSecure('report')">
-                    <div class="icon-circle" style="background:#dbeafe;">📊</div>
-                    <div>
-                        <div class="item-label">View Report</div>
-                        <div class="item-sub">See student results</div>
-                    </div>
-                </div>
-
-                <!-- Add Question -->
-                <div class="settings-item" onclick="goSecure('add')">
-                    <div class="icon-circle" style="background:#ede9fe;">➕</div>
-                    <div>
-                        <div class="item-label">Add Question</div>
-                        <div class="item-sub">Create a new question</div>
-                    </div>
-                </div>
-
-                <!-- Manage Questions -->
-                <div class="settings-item" onclick="goSecure('manage')">
-                    <div class="icon-circle" style="background:#fff7ed;">✏️</div>
-                    <div>
-                        <div class="item-label">Manage Questions</div>
-                        <div class="item-sub">Edit or delete questions</div>
-                    </div>
-                </div>
-
-                <!-- Repeat Toggle -->
-                <div class="settings-item" style="cursor:default;" onclick="event.stopPropagation();">
-                    <div class="icon-circle" style="background:#dcfce7;">🔁</div>
-                    <div style="flex:1;">
-                        <div class="item-label">Repeat Game</div>
-                        <div class="item-sub">Allow students to repeat</div>
-                    </div>
-                    <div onclick="toggleRepeat()" style="position:relative;width:48px;height:26px;flex-shrink:0;cursor:pointer;">
-                        <div id="repeatTrack" style="position:absolute;inset:0;border-radius:13px;background:#d1d5db;transition:background 0.25s;"></div>
-                        <div id="repeatThumb" style="position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);transition:left 0.25s;"></div>
-                    </div>
-                </div>
-
-                <!-- Statistics -->
-                <div class="settings-item" onclick="openStatistics()">
-                    <div class="icon-circle" style="background:#dbeafe;">📊</div>
-                    <div>
-                        <div class="item-label">Statistics</div>
-                        <div class="item-sub">Total questions & attempts</div>
-                    </div>
-                </div>
-
-                <!-- Close -->
-                <button onclick="closeSettings()" class="w-full mt-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium" style="border-radius:10px;">
-                    Close
-                </button>
-            </div>
-
-            <!-- HEADER EDIT PANEL -->
-            <div id="headerEditPanel" style="display:none;">
-                <div class="text-center mb-4">
-                    <div style="font-size:30px; margin-bottom:2px;">🎨</div>
-                    <h2 class="text-lg font-bold text-gray-800">Header / Logo Edit</h2>
-                    <p class="text-xs text-gray-500 mt-1">Customize title & subtitle</p>
-                </div>
-                <div class="mb-3">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                    <input type="text" id="editTitle" class="header-input" placeholder="e.g., Arrange the Word Game">
-                </div>
-                <div class="mb-3">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Subtitle</label>
-                    <input type="text" id="editSubtitle" class="header-input" placeholder="e.g., Learn English by arranging words into sentences!">
-                </div>
-                <div class="mb-3">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Title Icon (emoji)</label>
-                    <input type="text" id="editIcon" class="header-input" placeholder="e.g., 🎯">
-                </div>
-                <div class="flex gap-3 mt-5">
-                    <button onclick="saveHeaderEdit()" class="flex-1 py-2 bg-purple-500 text-white font-semibold text-sm hover:bg-purple-600 transition-colors" style="border-radius:10px;">
-                        💾 Save
-                    </button>
-                    <button onclick="backToSettingsMenu()" class="flex-1 py-2 bg-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-300 transition-colors" style="border-radius:10px;">
-                        ← Back
-                    </button>
-                </div>
-            </div>
-
-            <!-- STATISTICS PANEL -->
-            <div id="statisticsPanel" style="display:none;">
-                <div class="text-center mb-5">
-                    <div style="font-size:32px; margin-bottom:2px;">📊</div>
-                    <h2 class="text-lg font-bold text-gray-800">Statistics</h2>
-                </div>
-
-                <div style="display:flex; gap:10px; margin-bottom:14px;">
-                    <div style="flex:1; background:#eff6ff; border-radius:12px; padding:14px 10px; text-align:center; border:1.5px solid #bfdbfe;">
-                        <div id="statQuestionsNum" style="font-size:28px; font-weight:700; color:#2563eb;">0</div>
-                        <div style="font-size:11px; color:#6b7280; margin-top:2px;">Total Questions</div>
-                    </div>
-                    <div style="flex:1; background:#f0fdf4; border-radius:12px; padding:14px 10px; text-align:center; border:1.5px solid #bbf7d0;">
-                        <div id="statAttemptsNum" style="font-size:28px; font-weight:700; color:#16a34a;">0</div>
-                        <div style="font-size:11px; color:#6b7280; margin-top:2px;">Total Attempts</div>
-                    </div>
-                    <div style="flex:1; background:#fdf4ff; border-radius:12px; padding:14px 10px; text-align:center; border:1.5px solid #e9d5ff;">
-                        <div id="statNamesNum" style="font-size:28px; font-weight:700; color:#9333ea;">0</div>
-                        <div style="font-size:11px; color:#6b7280; margin-top:2px;">Students</div>
-                    </div>
-                </div>
-
-                <div id="statClearWrap" style="display:none; margin-bottom:10px;">
-                    <button onclick="clearAllData(); openStatistics();" style="width:100%; padding:10px; background:#ef4444; color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;">
-                        🗑️ Clear All Student Data
-                    </button>
-                </div>
-
-                <button onclick="backToSettingsMenu()" class="w-full py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium" style="border-radius:10px;">
-                    ← Back
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // ═══════════════════════════════════════════════════════════════════
-        // FIREBASE INTEGRATION LAYER
-        // ═══════════════════════════════════════════════════════════════════
-
-        // Wait for Firebase to initialize
-        function waitForFirebase(callback) {
-            if (window.firebaseInitialized) {
-                callback();
-            } else {
-                setTimeout(() => waitForFirebase(callback), 100);
-            }
-        }
-
-        // Firebase Status Management
-        function setFirebaseStatus(status, message) {
-            const statusEl = document.getElementById('firebaseStatus');
-            statusEl.className = `firebase-status ${status}`;
-            statusEl.querySelector('span').textContent = message;
-        }
-
-        // Firebase Sync Functions
-        const FirebaseSync = {
-            // Sync questions to Firebase
-            syncQuestions: function() {
-                const questionsRef = window.firebaseRef(window.firebaseDB, 'questions');
-                const questionsObj = {};
-                appState.questions.forEach(q => {
-                    questionsObj[`question_${q.id}`] = q;
-                });
-                window.firebaseSet(questionsRef, questionsObj)
-                    .then(() => console.log('✅ Questions synced to Firebase'))
-                    .catch(err => console.error('❌ Sync error:', err));
-            },
-
-            // Sync settings to Firebase
-            syncSettings: function() {
-                const settingsRef = window.firebaseRef(window.firebaseDB, 'settings');
-                window.firebaseSet(settingsRef, {
-                    customTitle: appState.customTitle,
-                    customSubtitle: appState.customSubtitle,
-                    customIcon: appState.customIcon,
-                    repeatEnabled: appState.repeatEnabled
-                })
-                .then(() => console.log('✅ Settings synced to Firebase'))
-                .catch(err => console.error('❌ Settings sync error:', err));
-            },
-
-            // Push a new result to Firebase
-            pushResult: function(result) {
-                const resultsRef = window.firebaseRef(window.firebaseDB, 'results');
-                const newResultRef = window.firebasePush(resultsRef);
-                window.firebaseSet(newResultRef, result)
-                    .then(() => console.log('✅ Result saved to Firebase'))
-                    .catch(err => console.error('❌ Result save error:', err));
-            },
-
-            // Listen to questions changes
-            listenQuestions: function() {
-                const questionsRef = window.firebaseRef(window.firebaseDB, 'questions');
-                window.firebaseOnValue(questionsRef, (snapshot) => {
-                    const data = snapshot.val();
-                    if (data) {
-                        appState.questions = Object.values(data);
-                        console.log('🔄 Questions updated from Firebase:', appState.questions.length);
-                        render();
-                    } else {
-                        // No questions in Firebase yet - upload default ones
-                        FirebaseSync.syncQuestions();
-                    }
-                });
-            },
-
-            // Listen to settings changes
-            listenSettings: function() {
-                const settingsRef = window.firebaseRef(window.firebaseDB, 'settings');
-                window.firebaseOnValue(settingsRef, (snapshot) => {
-                    const data = snapshot.val();
-                    if (data) {
-                        appState.customTitle = data.customTitle || appState.customTitle;
-                        appState.customSubtitle = data.customSubtitle || appState.customSubtitle;
-                        appState.customIcon = data.customIcon || appState.customIcon;
-                        appState.repeatEnabled = data.repeatEnabled || false;
-                        console.log('🔄 Settings updated from Firebase');
-                        render();
-                        syncRepeatUI();
-                    }
-                });
-            },
-
-            // Listen to results changes
-            listenResults: function() {
-                const resultsRef = window.firebaseRef(window.firebaseDB, 'results');
-                window.firebaseOnValue(resultsRef, (snapshot) => {
-                    const data = snapshot.val();
-                    if (data) {
-                        appState.allResults = Object.values(data);
-                        console.log('🔄 Results updated from Firebase:', appState.allResults.length);
-                        render();
-                    }
-                });
-            },
-
-            // Clear all results from Firebase
-            clearAllResults: function() {
-                const resultsRef = window.firebaseRef(window.firebaseDB, 'results');
-                return window.firebaseSet(resultsRef, null);
-            },
-
-            // Initialize all Firebase listeners
-            initializeListeners: function() {
-                this.listenQuestions();
-                this.listenSettings();
-                this.listenResults();
-                setFirebaseStatus('', '🟢 Connected');
-            }
-        };
-
-        // ═══════════════════════════════════════════════════════════════════
-        // APP STATE
-        // ═══════════════════════════════════════════════════════════════════
-
+        // App State
         let appState = {
             questions: [
-                {
-                    id: 1,
-                    words: ['princess', 'named', 'Elara', 'There lived', 'and', 'a kind', 'brave'],
-                    correctSentence: 'There lived a kind and brave princess named Elara',
-                    image: '📚',
-                    score: 12.5
-                },
-                {
-                    id: 2,
-                    words: ['in a beautiful', 'once', 'kingdom', 'called', 'upon a time', 'Auroria'],
-                    correctSentence: 'Once upon a time in a beautiful kingdom called Auroria',
-                    image: '🐱',
-                    score: 12.5
-                },
-                {
-                    id: 3,
-                    words: ['of happiness', 'the kingdom', 'was', 'and full', 'prosperous'],
-                    correctSentence: 'The Kingdom was prosperous and full of happiness',
-                    image: '🎮',
-                    score: 12.5
-                },
-                {
-                    id: 4,
-                    words: ['a hero', 'Elara', 'home as', 'returned', 'princess'],
-                    correctSentence: 'Princess Elara returned home as a hero',
-                    image: '📚',
-                    score: 12.5
-                },
-                {
-                    id: 5,
-                    words: ['slowly', 'returned to', 'The kingdom', 'happiness', 'and', 'normal'],
-                    correctSentence: 'The Kingdom slowly returned to normal and happiness',
-                    image: '🐱',
-                    score: 12.5
-                },
-                {
-                    id: 6,
-                    words: ['princess', 'to go on', 'decided', 'Elara', 'to save', 'a dangerous', 'her people', 'journey'],
-                    correctSentence: 'Princess Elara decided to go on a dangerous journey to save her people',
-                    image: '📚',
-                    score: 12.5
-                },
-                {
-                    id: 7,
-                    words: ['finally', 'the sorcerer', 'Elara', 'Castle', 'Princess', 'found'],
-                    correctSentence: 'Princess Elara finally found the sorcerer castle',
-                    image: '🐱',
-                    score: 12.5
-                },
-                {
-                    id: 8,
-                    words: ['and', 'the sorcerer', 'took back', 'she', 'the crystal', 'defeated', 'of life'],
-                    correctSentence: 'She defeated the sorcerer and took back the crystal of life',
-                    image: '🐱',
-                    score: 12.5
-                }
-
+                { id: 1, words: ['is', 'This', 'book', 'a'], correctSentence: 'This is a book', image: '📚', score: 10 },
+                { id: 2, words: ['cat', 'The', 'sleeping', 'is'], correctSentence: 'The cat is sleeping', image: '🐱', score: 10 },
+                { id: 3, words: ['play', 'Children', 'the', 'in', 'park'], correctSentence: 'Children play in the park', image: '🎮', score: 15 }
             ],
             currentScreen: 'menu',
             currentQuestion: 0,
@@ -584,7 +186,7 @@
             availableWords: [],
             studentName: '',
             studentClass: '',
-            results: [],
+            sessionResults: [],
             allResults: [],
             formWords: '',
             formSentence: '',
@@ -597,41 +199,147 @@
             repeatEnabled: false
         };
 
-        // Security credentials
         const SETTINGS_USER = 'Unknown';
         const SETTINGS_PASS = '56789';
         let settingsUnlocked = false;
 
-        // ═══════════════════════════════════════════════════════════════════
-        // UTILITY FUNCTIONS
-        // ═══════════════════════════════════════════════════════════════════
-
-        function shuffleArray(array) {
-            const newArray = [...array];
-            for (let i = newArray.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-            }
-            return newArray;
+        function setStatus(cls, msg) {
+            const el = document.getElementById('firebaseStatus');
+            el.className = `firebase-status ${cls}`;
+            el.textContent = msg;
         }
 
         function normaliseName(name) {
             return name.trim().replace(/\s+/g, ' ').toLowerCase();
         }
 
+        function shuffleArray(arr) {
+            const a = [...arr];
+            for (let i = a.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [a[i], a[j]] = [a[j], a[i]];
+            }
+            return a;
+        }
+
         // ═══════════════════════════════════════════════════════════════════
-        // SETTINGS MODAL
+        // FIRESTORE FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════
+
+        async function syncQuestions() {
+            if (!db) return;
+            try {
+                console.log('📤 Syncing questions to Firestore...');
+                const batch = db.batch();
+                appState.questions.forEach(q => {
+                    const ref = db.collection('questions').doc(`q_${q.id}`);
+                    batch.set(ref, q);
+                });
+                await batch.commit();
+                console.log('✅ Questions synced');
+            } catch (err) {
+                console.error('❌ Sync error:', err);
+            }
+        }
+
+        async function syncSettings() {
+            if (!db) return;
+            try {
+                await db.collection('settings').doc('config').set({
+                    customTitle: appState.customTitle,
+                    customSubtitle: appState.customSubtitle,
+                    customIcon: appState.customIcon,
+                    repeatEnabled: appState.repeatEnabled
+                });
+                console.log('✅ Settings synced');
+            } catch (err) {
+                console.error('❌ Settings sync error:', err);
+            }
+        }
+
+        async function pushResult(result) {
+            if (!db) {
+                alert('⚠️ Firestore not connected!');
+                return;
+            }
+            try {
+                console.log('📤 Pushing result:', result.studentName);
+                await db.collection('results').add(result);
+                console.log('✅ Result saved');
+                return Promise.resolve();
+            } catch (err) {
+                console.error('❌ Push error:', err);
+                alert(`❌ Gagal simpan!\n\n${err.message}`);
+                return Promise.reject(err);
+            }
+        }
+
+        function setupListeners() {
+            if (!db) return;
+            
+            console.log('👂 Setting up Firestore listeners...');
+
+            // Listen to questions
+            db.collection('questions').onSnapshot((snapshot) => {
+                if (!snapshot.empty) {
+                    appState.questions = snapshot.docs.map(doc => doc.data());
+                    console.log('🔄 Questions updated:', appState.questions.length);
+                    render();
+                } else {
+                    console.log('⚠️ No questions, uploading defaults...');
+                    syncQuestions();
+                }
+            }, (err) => {
+                console.error('❌ Questions listener error:', err);
+            });
+
+            // Listen to settings
+            db.collection('settings').doc('config').onSnapshot((doc) => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    appState.customTitle = data.customTitle || appState.customTitle;
+                    appState.customSubtitle = data.customSubtitle || appState.customSubtitle;
+                    appState.customIcon = data.customIcon || appState.customIcon;
+                    appState.repeatEnabled = data.repeatEnabled || false;
+                    console.log('🔄 Settings updated (repeat:', appState.repeatEnabled, ')');
+                    syncRepeatUI();
+                    render();
+                }
+            }, (err) => {
+                console.error('❌ Settings listener error:', err);
+            });
+
+            // Listen to results
+            db.collection('results').orderBy('timestamp', 'desc').onSnapshot((snapshot) => {
+                if (!snapshot.empty) {
+                    appState.allResults = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    console.log('🔄 Results updated:', appState.allResults.length);
+                    const unique = new Set(appState.allResults.map(r => normaliseName(r.studentName)));
+                    console.log('👥 Unique students:', unique.size);
+                    render();
+                } else {
+                    appState.allResults = [];
+                }
+            }, (err) => {
+                console.error('❌ Results listener error:', err);
+            });
+
+            console.log('✅ All listeners active');
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SETTINGS
         // ═══════════════════════════════════════════════════════════════════
 
         function openSettings() {
             document.getElementById('settingsModal').style.display = 'flex';
-            document.getElementById('loginUser').value = '';
-            document.getElementById('loginPass').value = '';
-            document.getElementById('loginError').style.display = 'none';
+            document.getElementById('headerEditPanel').style.display = 'none';
             if (settingsUnlocked) {
-                showSettingsMenu();
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('settingsMenu').style.display = 'block';
             } else {
-                showLoginScreen();
+                document.getElementById('loginScreen').style.display = 'block';
+                document.getElementById('settingsMenu').style.display = 'none';
             }
         }
 
@@ -639,36 +347,17 @@
             document.getElementById('settingsModal').style.display = 'none';
         }
 
-        function closeSettingsOnOverlay(e) {
-            if (e.target === document.getElementById('settingsModal')) closeSettings();
-        }
-
-        function showLoginScreen() {
-            document.getElementById('loginScreen').style.display = 'block';
-            document.getElementById('settingsMenu').style.display = 'none';
-            document.getElementById('headerEditPanel').style.display = 'none';
-            document.getElementById('statisticsPanel').style.display = 'none';
-        }
-
-        function showSettingsMenu() {
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('settingsMenu').style.display = 'block';
-            document.getElementById('headerEditPanel').style.display = 'none';
-            document.getElementById('statisticsPanel').style.display = 'none';
-            syncRepeatUI();
-        }
-
         function attemptLogin() {
-            const user = document.getElementById('loginUser').value.trim();
-            const pass = document.getElementById('loginPass').value.trim();
-            if (user === SETTINGS_USER && pass === SETTINGS_PASS) {
+            const u = document.getElementById('loginUser').value.trim();
+            const p = document.getElementById('loginPass').value.trim();
+            if (u === SETTINGS_USER && p === SETTINGS_PASS) {
                 settingsUnlocked = true;
                 document.getElementById('loginError').style.display = 'none';
-                showSettingsMenu();
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('settingsMenu').style.display = 'block';
+                syncRepeatUI();
             } else {
                 document.getElementById('loginError').style.display = 'block';
-                document.getElementById('loginPass').value = '';
-                document.getElementById('loginPass').focus();
             }
         }
 
@@ -677,10 +366,10 @@
             changeScreen(screen);
         }
 
-        // ─── Repeat Toggle ───
         function toggleRepeat() {
             appState.repeatEnabled = !appState.repeatEnabled;
-            FirebaseSync.syncSettings(); // Sync to Firebase
+            console.log('🔁 Repeat:', appState.repeatEnabled);
+            syncSettings();
             syncRepeatUI();
         }
 
@@ -697,19 +386,19 @@
             }
         }
 
-        // ─── Header Edit ───
         function openHeaderEdit() {
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('settingsMenu').style.display = 'none';
             document.getElementById('headerEditPanel').style.display = 'block';
-            document.getElementById('statisticsPanel').style.display = 'none';
             document.getElementById('editTitle').value = appState.customTitle;
             document.getElementById('editSubtitle').value = appState.customSubtitle;
             document.getElementById('editIcon').value = appState.customIcon;
         }
 
         function backToSettingsMenu() {
-            showSettingsMenu();
+            document.getElementById('headerEditPanel').style.display = 'none';
+            document.getElementById('settingsMenu').style.display = 'block';
+            syncRepeatUI();
         }
 
         function saveHeaderEdit() {
@@ -719,40 +408,58 @@
             if (t) appState.customTitle = t;
             if (s) appState.customSubtitle = s;
             if (i) appState.customIcon = i;
-            FirebaseSync.syncSettings(); // Sync to Firebase
+            syncSettings();
             closeSettings();
             render();
         }
 
-        // ─── Statistics ───
-        function openStatistics() {
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('settingsMenu').style.display = 'none';
-            document.getElementById('headerEditPanel').style.display = 'none';
-            document.getElementById('statisticsPanel').style.display = 'block';
-
-            const uniqueNames = new Set(appState.allResults.map(r => normaliseName(r.studentName)));
-            document.getElementById('statQuestionsNum').textContent = appState.questions.length;
-            document.getElementById('statAttemptsNum').textContent = appState.allResults.length;
-            document.getElementById('statNamesNum').textContent = uniqueNames.size;
-            document.getElementById('statClearWrap').style.display = appState.allResults.length > 0 ? 'block' : 'none';
+        async function clearAllData() {
+            if (confirm('⚠️ Hapus semua data siswa?')) {
+                if (db) {
+                    try {
+                        const snapshot = await db.collection('results').get();
+                        const batch = db.batch();
+                        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+                        await batch.commit();
+                        appState.sessionResults = [];
+                        appState.allResults = [];
+                        alert('✅ Data dihapus!');
+                    } catch (err) {
+                        console.error('Error clearing:', err);
+                        alert('❌ Gagal hapus data!');
+                    }
+                }
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════
         // PDF DOWNLOAD
         // ═══════════════════════════════════════════════════════════════════
 
-        function downloadPDF() {
+        function downloadAllStudentsPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
 
-            const totalScore = appState.results.reduce((sum, r) => sum + (r.isCorrect ? r.score : 0), 0);
-            const maxScore = appState.results.reduce((sum, r) => sum + r.score, 0);
-            const percentage = maxScore > 0 ? ((totalScore / maxScore) * 100).toFixed(1) : 0;
+            const studentMap = {};
+            appState.allResults.forEach(r => {
+                const key = `${r.studentName}|${r.studentClass}`;
+                if (!studentMap[key]) {
+                    studentMap[key] = { name: r.studentName, class: r.studentClass, results: [], totalScore: 0, maxScore: 0 };
+                }
+                studentMap[key].results.push(r);
+                if (r.isCorrect) studentMap[key].totalScore += r.score;
+                studentMap[key].maxScore += r.score;
+            });
+            const students = Object.values(studentMap);
+
+            if (students.length === 0) {
+                alert('⚠️ Belum ada data siswa!');
+                return;
+            }
 
             doc.setFontSize(20);
             doc.setTextColor(79, 70, 229);
-            doc.text('STUDENT REPORT', 105, 20, { align: 'center' });
+            doc.text('LAPORAN SEMUA SISWA', 105, 20, { align: 'center' });
             doc.text(appState.customTitle, 105, 30, { align: 'center' });
 
             doc.setDrawColor(79, 70, 229);
@@ -761,45 +468,62 @@
 
             doc.setFontSize(12);
             doc.setTextColor(0, 0, 0);
-            doc.text(`Student Name: ${appState.studentName}`, 20, 45);
-            doc.text(`Class: ${appState.studentClass}`, 20, 52);
-            doc.text(`Date: ${new Date().toLocaleString()}`, 20, 59);
-            doc.text(`Score: ${totalScore} / ${maxScore} (${percentage}%)`, 20, 66);
+            doc.text(`Tanggal: ${new Date().toLocaleString('id-ID')}`, 20, 45);
+            doc.text(`Total Siswa: ${students.length}`, 20, 52);
+            doc.line(20, 57, 190, 57);
 
-            doc.line(20, 72, 190, 72);
+            let yPos = 65;
 
-            doc.setFontSize(14);
-            doc.setTextColor(79, 70, 229);
-            doc.text('DETAILED RESULTS:', 20, 82);
+            students.forEach((student, index) => {
+                const pct = student.maxScore > 0 ? ((student.totalScore / student.maxScore) * 100).toFixed(1) : 0;
 
-            doc.setFontSize(10);
-            doc.setTextColor(0, 0, 0);
-            let yPos = 92;
-
-            appState.results.forEach((result, index) => {
-                if (yPos > 270) { doc.addPage(); yPos = 20; }
-                doc.setFont(undefined, 'bold');
-                doc.text(`Question ${index + 1}: (${result.score} points)`, 20, yPos);
-                yPos += 7;
-                doc.setFont(undefined, 'normal');
-                if (result.isCorrect) {
-                    doc.setTextColor(0, 128, 0);
-                    doc.text(`Status: CORRECT - Earned ${result.score} points`, 25, yPos);
-                } else {
-                    doc.setTextColor(220, 38, 38);
-                    doc.text('Status: INCORRECT - 0 points', 25, yPos);
+                if (yPos > 250) {
+                    doc.addPage();
+                    yPos = 20;
                 }
+
+                doc.setFontSize(14);
+                doc.setTextColor(79, 70, 229);
+                doc.setFont(undefined, 'bold');
+                doc.text(`${index + 1}. ${student.name}`, 20, yPos);
+                yPos += 7;
+
+                doc.setFontSize(11);
                 doc.setTextColor(0, 0, 0);
-                yPos += 7;
-                doc.text(`Correct Answer: ${result.question}`, 25, yPos);
-                yPos += 7;
-                doc.text(`Student Answer: ${result.userAnswer}`, 25, yPos);
-                yPos += 7;
-                doc.setFontSize(8);
-                doc.setTextColor(128, 128, 128);
-                doc.text(`Time: ${result.timestamp}`, 25, yPos);
+                doc.setFont(undefined, 'normal');
+                doc.text(`Kelas: ${student.class}`, 25, yPos);
+                yPos += 6;
+                doc.text(`Skor: ${student.totalScore}/${student.maxScore} (${pct}%)`, 25, yPos);
+                yPos += 8;
+
                 doc.setFontSize(10);
-                doc.setTextColor(0, 0, 0);
+                student.results.forEach((r) => {
+                    if (yPos > 270) {
+                        doc.addPage();
+                        yPos = 20;
+                    }
+
+                    if (r.isCorrect) {
+                        doc.setTextColor(0, 128, 0);
+                        doc.text(`   Q${r.questionNumber}: ✓ BENAR - ${r.score} poin`, 30, yPos);
+                    } else {
+                        doc.setTextColor(220, 38, 38);
+                        doc.text(`   Q${r.questionNumber}: ✗ SALAH - 0 poin`, 30, yPos);
+                    }
+                    doc.setTextColor(100, 100, 100);
+                    yPos += 5;
+                    doc.setFontSize(9);
+                    doc.text(`      Jawaban: ${r.userAnswer}`, 30, yPos);
+                    yPos += 5;
+                    doc.text(`      Benar: ${r.question}`, 30, yPos);
+                    doc.setFontSize(10);
+                    doc.setTextColor(0, 0, 0);
+                    yPos += 7;
+                });
+
+                yPos += 5;
+                doc.setDrawColor(200, 200, 200);
+                doc.line(20, yPos, 190, yPos);
                 yPos += 10;
             });
 
@@ -811,14 +535,16 @@
                 doc.text('Created & Developed by D.D Candra', 105, 284, { align: 'center' });
                 doc.setFontSize(8);
                 doc.setTextColor(128, 128, 128);
-                doc.text(`Page ${i} of ${pageCount}`, 105, 290, { align: 'center' });
+                doc.text(`Halaman ${i} dari ${pageCount}`, 105, 290, { align: 'center' });
             }
 
-            doc.save(`${appState.studentName}_Report_${Date.now()}.pdf`);
+            const timestamp = new Date().toISOString().slice(0, 10);
+            doc.save(`Laporan_Semua_Siswa_${timestamp}.pdf`);
+            alert('✅ PDF berhasil di-download!');
         }
 
         // ═══════════════════════════════════════════════════════════════════
-        // RENDER FUNCTIONS
+        // RENDER
         // ═══════════════════════════════════════════════════════════════════
 
         function renderMenu() {
@@ -826,31 +552,110 @@
                 <div class="max-w-4xl mx-auto p-6 fade-in">
                     <div class="bg-white rounded-2xl shadow-xl p-8">
                         <div class="flex items-center justify-center gap-2 mb-2">
-                            <h1 class="text-4xl font-bold text-center text-blue-600">
-                                ${appState.customIcon} ${appState.customTitle}
-                            </h1>
-                            <button class="gear-btn" onclick="openSettings()" title="Settings">⚙️</button>
+                            <h1 class="text-4xl font-bold text-blue-600">${appState.customIcon} ${appState.customTitle}</h1>
+                            <button class="gear-btn" onclick="openSettings()">⚙️</button>
                         </div>
                         <p class="text-center text-gray-600 mb-8">${appState.customSubtitle}</p>
-
                         <div class="mb-6">
                             <label class="block text-sm font-medium mb-2">Student Name:</label>
-                            <input type="text" id="studentName" value="${appState.studentName}"
-                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter your name" />
+                            <input type="text" id="studentName" value="${appState.studentName}" class="w-full px-4 py-3 border rounded-lg" placeholder="Enter name" />
                         </div>
-
                         <div class="mb-6">
                             <label class="block text-sm font-medium mb-2">Class:</label>
-                            <input type="text" id="studentClass" value="${appState.studentClass}"
-                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter your class (e.g., 5A, 6B)" />
+                            <input type="text" id="studentClass" value="${appState.studentClass}" class="w-full px-4 py-3 border rounded-lg" placeholder="e.g., 5A" />
                         </div>
+                        <button onclick="startGame()" class="w-full bg-green-500 text-white px-6 py-4 rounded-xl hover:bg-green-600 font-semibold text-lg">▶️ Start Game</button>
+                    </div>
+                </div>
+            `;
+        }
 
+        function renderPlayGame() {
+            const q = appState.questions[appState.currentQuestion];
+            return `
+                <div class="max-w-4xl mx-auto p-6 fade-in">
+                    <div class="bg-white rounded-2xl shadow-xl p-8">
+                        <div class="flex justify-between mb-6">
+                            <h2 class="text-2xl font-bold text-green-600">Question ${appState.currentQuestion + 1} of ${appState.questions.length}</h2>
+                            <button onclick="changeScreen('menu')" class="px-4 py-2 bg-gray-200 rounded-lg">Exit</button>
+                        </div>
+                        <div class="text-center mb-8">
+                            <div class="text-8xl mb-4">${q.image}</div>
+                            <p class="text-xl font-medium">Arrange the words:</p>
+                            <p class="text-lg font-semibold text-blue-600 mt-2">Score: ${q.score} points</p>
+                        </div>
                         <div class="mb-8">
-                            <button onclick="startGame()" class="w-full flex items-center justify-center gap-2 bg-green-500 text-white px-6 py-4 rounded-xl hover:bg-green-600 transition-colors font-semibold text-lg">
-                                ▶️ Start Game
-                            </button>
+                            <h3 class="text-lg font-semibold mb-3">Your Answer:</h3>
+                            <div id="selectedWordsArea" class="min-h-[80px] bg-blue-50 border-2 border-blue-300 rounded-lg p-4 flex flex-wrap gap-2">
+                                ${appState.selectedWords.length === 0 ? '<p class="text-gray-400">Tap words</p>' : appState.selectedWords.map(w => `<button onclick="moveWordToAvailable('${w}')" class="px-4 py-2 bg-blue-500 text-white rounded-lg">${w}</button>`).join('')}
+                            </div>
+                        </div>
+                        <div class="mb-8">
+                            <h3 class="text-lg font-semibold mb-3">Available Words:</h3>
+                            <div id="availableWordsArea" class="flex flex-wrap gap-2">
+                                ${appState.availableWords.map(w => `<button onclick="moveWordToSelected('${w}')" class="px-4 py-2 bg-gray-200 rounded-lg">${w}</button>`).join('')}
+                            </div>
+                        </div>
+                        <button onclick="checkAnswer()" class="w-full bg-green-500 text-white px-6 py-4 rounded-xl hover:bg-green-600 font-bold text-lg">✓ Check</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderReport() {
+            const studentMap = {};
+            appState.allResults.forEach(r => {
+                const key = `${r.studentName}|${r.studentClass}`;
+                if (!studentMap[key]) {
+                    studentMap[key] = { name: r.studentName, class: r.studentClass, results: [], totalScore: 0, maxScore: 0 };
+                }
+                studentMap[key].results.push(r);
+                if (r.isCorrect) studentMap[key].totalScore += r.score;
+                studentMap[key].maxScore += r.score;
+            });
+            const students = Object.values(studentMap);
+
+            if (students.length === 0) {
+                return `
+                    <div class="max-w-4xl mx-auto p-6 fade-in">
+                        <div class="bg-white rounded-2xl shadow-xl p-8">
+                            <h2 class="text-3xl font-bold mb-6 text-indigo-600">📊 All Student Reports</h2>
+                            <div class="text-center py-12">
+                                <p class="text-xl text-gray-500 mb-6">Belum ada hasil siswa.</p>
+                                <button onclick="changeScreen('menu')" class="bg-indigo-500 text-white px-6 py-3 rounded-lg">Back</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="max-w-5xl mx-auto p-6 fade-in">
+                    <div class="bg-white rounded-2xl shadow-xl p-8">
+                        <h2 class="text-3xl font-bold mb-6 text-indigo-600">📊 All Students (${students.length})</h2>
+                        <div class="space-y-6">
+                            ${students.map(s => {
+                                const pct = s.maxScore > 0 ? ((s.totalScore / s.maxScore) * 100).toFixed(1) : 0;
+                                return `
+                                    <div class="border-2 border-indigo-200 rounded-xl p-5 bg-gradient-to-r from-indigo-50 to-purple-50">
+                                        <div class="flex justify-between mb-4">
+                                            <div><h4 class="text-xl font-bold">${s.name}</h4><p class="text-sm text-gray-600">Class: ${s.class}</p></div>
+                                            <div class="text-right"><p class="text-2xl font-bold text-indigo-600">${s.totalScore}/${s.maxScore}</p><p class="text-sm">${pct}%</p></div>
+                                        </div>
+                                        <div class="grid grid-cols-3 gap-2">
+                                            ${s.results.map(r => `
+                                                <div class="text-xs p-2 rounded ${r.isCorrect ? 'bg-green-100' : 'bg-red-100'}">
+                                                    Q${r.questionNumber}: ${r.isCorrect ? `✅ ${r.score}pts` : '❌ 0pts'}
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        <div class="flex gap-4 mt-6">
+                            <button onclick="downloadAllStudentsPDF()" class="flex-1 bg-indigo-500 text-white px-6 py-3 rounded-lg hover:bg-indigo-600 font-semibold">📥 Download PDF</button>
+                            <button onclick="changeScreen('menu')" class="bg-gray-500 text-white px-6 py-3 rounded-lg font-semibold">Back</button>
                         </div>
                     </div>
                 </div>
@@ -864,36 +669,24 @@
                         <h2 class="text-3xl font-bold mb-6 text-purple-600">➕ Add New Question</h2>
                         <div class="space-y-4">
                             <div>
-                                <label class="block text-sm font-medium mb-2">Words (separate with commas):</label>
-                                <input type="text" id="formWords" value="${appState.formWords}"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                                    placeholder="e.g., is, This, book, a" />
+                                <label class="block text-sm font-medium mb-2">Words (comma separated):</label>
+                                <input type="text" id="formWords" value="${appState.formWords || ''}" class="w-full px-4 py-3 border rounded-lg" placeholder="e.g., is, This, book, a" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium mb-2">Correct Sentence:</label>
-                                <input type="text" id="formSentence" value="${appState.formSentence}"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                                    placeholder="e.g., This is a book" />
+                                <input type="text" id="formSentence" value="${appState.formSentence || ''}" class="w-full px-4 py-3 border rounded-lg" placeholder="e.g., This is a book" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium mb-2">Image (emoji):</label>
-                                <input type="text" id="formImage" value="${appState.formImage}"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                                    placeholder="e.g., 📚" />
+                                <input type="text" id="formImage" value="${appState.formImage || '📝'}" class="w-full px-4 py-3 border rounded-lg" placeholder="e.g., 📚" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium mb-2">Score (points):</label>
-                                <input type="number" id="formScore" value="${appState.formScore}" min="1" max="100"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                                    placeholder="e.g., 10" />
+                                <input type="number" id="formScore" value="${appState.formScore || 10}" min="1" max="100" class="w-full px-4 py-3 border rounded-lg" />
                             </div>
                             <div class="flex gap-4">
-                                <button onclick="handleAddQuestion()" class="flex-1 flex items-center justify-center gap-2 bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 transition-colors font-semibold">
-                                    💾 Save Question
-                                </button>
-                                <button onclick="changeScreen('menu')" class="flex items-center justify-center gap-2 bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors">
-                                    ❌ Cancel
-                                </button>
+                                <button onclick="handleAddQuestion()" class="flex-1 bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 font-semibold">💾 Save Question</button>
+                                <button onclick="changeScreen('menu')" class="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600">❌ Cancel</button>
                             </div>
                         </div>
                     </div>
@@ -917,6 +710,7 @@
                                                     <p class="font-semibold text-lg">Question ${index + 1}</p>
                                                     <p class="text-sm text-gray-600">Words: ${q.words.join(', ')}</p>
                                                     <p class="text-sm text-green-600 font-medium">Answer: ${q.correctSentence}</p>
+                                                    <p class="text-sm text-blue-600">Score: ${q.score} points</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -928,9 +722,7 @@
                                 </div>
                             `).join('')}
                         </div>
-                        <button onclick="changeScreen('menu')" class="mt-6 w-full bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors font-semibold">
-                            Back to Menu
-                        </button>
+                        <button onclick="changeScreen('menu')" class="mt-6 w-full bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 font-semibold">Back to Menu</button>
                     </div>
                 </div>
             `;
@@ -943,152 +735,25 @@
                         <h2 class="text-3xl font-bold mb-6 text-blue-600">✏️ Edit Question</h2>
                         <div class="space-y-4">
                             <div>
-                                <label class="block text-sm font-medium mb-2">Words (separate with commas):</label>
-                                <input type="text" id="formWords" value="${appState.formWords}"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                                <label class="block text-sm font-medium mb-2">Words (comma separated):</label>
+                                <input type="text" id="formWords" value="${appState.formWords || ''}" class="w-full px-4 py-3 border rounded-lg" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium mb-2">Correct Sentence:</label>
-                                <input type="text" id="formSentence" value="${appState.formSentence}"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                                <input type="text" id="formSentence" value="${appState.formSentence || ''}" class="w-full px-4 py-3 border rounded-lg" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium mb-2">Image (emoji):</label>
-                                <input type="text" id="formImage" value="${appState.formImage}"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                                <input type="text" id="formImage" value="${appState.formImage || '📝'}" class="w-full px-4 py-3 border rounded-lg" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium mb-2">Score (points):</label>
-                                <input type="number" id="formScore" value="${appState.formScore}" min="1" max="100"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                    placeholder="e.g., 10" />
+                                <input type="number" id="formScore" value="${appState.formScore || 10}" min="1" max="100" class="w-full px-4 py-3 border rounded-lg" />
                             </div>
                             <div class="flex gap-4">
-                                <button onclick="handleUpdateQuestion()" class="flex-1 flex items-center justify-center gap-2 bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-semibold">
-                                    💾 Update Question
-                                </button>
-                                <button onclick="changeScreen('manage')" class="flex items-center justify-center gap-2 bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors">
-                                    ❌ Cancel
-                                </button>
+                                <button onclick="handleUpdateQuestion()" class="flex-1 bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 font-semibold">💾 Update Question</button>
+                                <button onclick="changeScreen('manage')" class="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600">❌ Cancel</button>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderPlayGame() {
-            const question = appState.questions[appState.currentQuestion];
-            return `
-                <div class="max-w-4xl mx-auto p-6 fade-in">
-                    <div class="bg-white rounded-2xl shadow-xl p-8">
-                        <div class="flex justify-between items-center mb-6">
-                            <h2 class="text-2xl font-bold text-green-600">
-                                Question ${appState.currentQuestion + 1} of ${appState.questions.length}
-                            </h2>
-                            <button onclick="changeScreen('menu')" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">Exit</button>
-                        </div>
-
-                        <div class="text-center mb-8">
-                            <div class="text-8xl mb-4">${question.image}</div>
-                            <p class="text-xl font-medium text-gray-700">Arrange the words to form a correct sentence:</p>
-                            <p class="text-lg font-semibold text-blue-600 mt-2">Score: ${question.score} points</p>
-                        </div>
-
-                        <div class="mb-8">
-                            <h3 class="text-lg font-semibold mb-3">Your Answer:</h3>
-                            <div id="selectedWordsArea" class="min-h-[80px] bg-blue-50 border-2 border-blue-300 rounded-lg p-4 flex flex-wrap gap-2">
-                                ${appState.selectedWords.length === 0
-                                    ? '<p class="text-gray-400 italic">Tap words below to build your sentence</p>'
-                                    : appState.selectedWords.map(word =>
-                                        `<button onclick="moveWordToAvailable('${word}')" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 smooth-transition font-medium">${word}</button>`
-                                    ).join('')
-                                }
-                            </div>
-                        </div>
-
-                        <div class="mb-8">
-                            <h3 class="text-lg font-semibold mb-3">Available Words:</h3>
-                            <div id="availableWordsArea" class="flex flex-wrap gap-2">
-                                ${appState.availableWords.map(word =>
-                                    `<button onclick="moveWordToSelected('${word}')" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 smooth-transition font-medium">${word}</button>`
-                                ).join('')}
-                            </div>
-                        </div>
-
-                        <button onclick="checkAnswer()" class="w-full bg-green-500 text-white px-6 py-4 rounded-xl hover:bg-green-600 transition-colors font-bold text-lg">
-                            ✓ Check Answer
-                        </button>
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderReport() {
-            const totalScore = appState.results.reduce((sum, r) => sum + (r.isCorrect ? r.score : 0), 0);
-            const maxScore = appState.results.reduce((sum, r) => sum + r.score, 0);
-            const percentage = maxScore > 0 ? ((totalScore / maxScore) * 100).toFixed(1) : 0;
-
-            if (appState.results.length === 0) {
-                return `
-                    <div class="max-w-4xl mx-auto p-6 fade-in">
-                        <div class="bg-white rounded-2xl shadow-xl p-8">
-                            <h2 class="text-3xl font-bold mb-2 text-indigo-600">${appState.customIcon} ${appState.customTitle}</h2>
-                            <p class="text-gray-500 mb-6">${appState.customSubtitle}</p>
-                            <h3 class="text-xl font-bold text-indigo-600 mb-4">📊 Student Report</h3>
-                            <div class="text-center py-12">
-                                <p class="text-xl text-gray-500 mb-6">No results yet. Play the game first!</p>
-                                <button onclick="changeScreen('menu')" class="bg-indigo-500 text-white px-6 py-3 rounded-lg hover:bg-indigo-600">Back to Menu</button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-
-            return `
-                <div class="max-w-4xl mx-auto p-6 fade-in">
-                    <div class="bg-white rounded-2xl shadow-xl p-8">
-                        <h2 class="text-3xl font-bold mb-1 text-indigo-600">${appState.customIcon} ${appState.customTitle}</h2>
-                        <p class="text-gray-500 mb-5">${appState.customSubtitle}</p>
-                        <h3 class="text-xl font-bold text-indigo-600 mb-4">📊 Student Report</h3>
-
-                        <div class="bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl p-6 mb-6">
-                            <h3 class="text-2xl font-bold mb-2">Student: ${appState.studentName}</h3>
-                            <p class="text-lg mb-1">Class: ${appState.studentClass}</p>
-                            <p class="text-xl font-bold">Score: ${totalScore} / ${maxScore} (${percentage}%)</p>
-                        </div>
-
-                        <div class="space-y-4 mb-6">
-                            ${appState.results.map((result, index) => `
-                                <div class="border-2 rounded-lg p-4 ${result.isCorrect ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}">
-                                    <div class="flex items-start justify-between">
-                                        <div class="flex-1">
-                                            <p class="font-semibold text-lg mb-2">
-                                                ${result.isCorrect ? '✅' : '❌'} Question ${result.questionNumber} - ${result.score} points
-                                            </p>
-                                            <p class="text-sm font-medium ${result.isCorrect ? 'text-green-700' : 'text-red-700'}">
-                                                ${result.isCorrect ? `Earned: ${result.score} points` : 'Earned: 0 points'}
-                                            </p>
-                                            <p class="text-sm text-gray-700 mt-1">
-                                                <span class="font-medium">Correct Answer:</span> ${result.question}
-                                            </p>
-                                            <p class="text-sm text-gray-700">
-                                                <span class="font-medium">Your Answer:</span> ${result.userAnswer}
-                                            </p>
-                                            <p class="text-xs text-gray-500 mt-1">${result.timestamp}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-
-                        <div class="flex gap-4">
-                            <button onclick="downloadPDF()" class="flex-1 flex items-center justify-center gap-2 bg-indigo-500 text-white px-6 py-3 rounded-lg hover:bg-indigo-600 transition-colors font-semibold">
-                                📥 Download PDF Report
-                            </button>
-                            <button onclick="changeScreen('menu')" class="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors">
-                                Back to Menu
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -1096,7 +761,7 @@
         }
 
         // ═══════════════════════════════════════════════════════════════════
-        // ACTION HANDLERS
+        // ACTIONS
         // ═══════════════════════════════════════════════════════════════════
 
         function changeScreen(screen) {
@@ -1105,153 +770,93 @@
         }
 
         function startGame() {
-            const nameInput = document.getElementById('studentName');
-            const classInput = document.getElementById('studentClass');
-            if (nameInput) appState.studentName = nameInput.value;
-            if (classInput) appState.studentClass = classInput.value;
+            const n = document.getElementById('studentName');
+            const c = document.getElementById('studentClass');
+            if (n) appState.studentName = n.value;
+            if (c) appState.studentClass = c.value;
 
-            if (!appState.studentName.trim()) {
-                alert('Please enter your name first!');
+            if (!appState.studentName.trim()) { alert('Masukkan nama!'); return; }
+            if (!appState.studentClass.trim()) { alert('Masukkan kelas!'); return; }
+
+            console.log('🎮 Starting:', appState.studentName);
+
+            const norm = normaliseName(appState.studentName);
+            const played = [...new Set(appState.allResults.map(r => normaliseName(r.studentName)))];
+
+            console.log('🔍 Check:', norm);
+            console.log('🔁 Repeat:', appState.repeatEnabled);
+
+            if (played.includes(norm) && !appState.repeatEnabled) {
+                console.log('🚫 BLOCKED');
+                alert(`🚫 Nama "${appState.studentName.trim()}" sudah pernah mengerjakan!\n\nSetiap siswa hanya 1x.`);
                 return;
             }
-            if (!appState.studentClass.trim()) {
-                alert('Please enter your class first!');
-                return;
-            }
 
-            // One-name-one-chance check
-            const currentNorm = normaliseName(appState.studentName);
-            const playedNames = [...new Set(appState.allResults.map(r => normaliseName(r.studentName)))];
-
-            if (playedNames.includes(currentNorm)) {
-                if (!appState.repeatEnabled) {
-                    alert(
-                        '🚫 Nama "' + appState.studentName.trim() + '" sudah pernah mengerjakan game ini.\n\n' +
-                        'Setiap siswa hanya boleh mengerjakan 1x.\n' +
-                        'Hubungi guru untuk mengaktifkan fitur Repeat jika diperlukan.'
-                    );
-                    return;
-                }
-            }
-
+            console.log('✅ ALLOWED');
             appState.currentQuestion = 0;
-            appState.results = [];
+            appState.sessionResults = [];
             appState.selectedWords = [];
             appState.availableWords = shuffleArray(appState.questions[0].words);
             appState.currentScreen = 'play';
             render();
         }
 
-        function moveWordToSelected(word) {
-            appState.selectedWords.push(word);
-            appState.availableWords = appState.availableWords.filter(w => w !== word);
+        function moveWordToSelected(w) {
+            appState.selectedWords.push(w);
+            appState.availableWords = appState.availableWords.filter(x => x !== w);
             updateGameDisplay();
         }
 
-        function moveWordToAvailable(word) {
-            appState.availableWords.push(word);
-            appState.selectedWords = appState.selectedWords.filter(w => w !== word);
+        function moveWordToAvailable(w) {
+            appState.availableWords.push(w);
+            appState.selectedWords = appState.selectedWords.filter(x => x !== w);
             updateGameDisplay();
         }
 
         function updateGameDisplay() {
-            const selectedArea = document.getElementById('selectedWordsArea');
-            const availableArea = document.getElementById('availableWordsArea');
-
-            if (selectedArea) {
-                if (appState.selectedWords.length === 0) {
-                    selectedArea.innerHTML = '<p class="text-gray-400 italic">Tap words below to build your sentence</p>';
-                } else {
-                    selectedArea.innerHTML = appState.selectedWords.map(word =>
-                        `<button onclick="moveWordToAvailable('${word}')" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 smooth-transition font-medium">${word}</button>`
-                    ).join('');
-                }
+            const sel = document.getElementById('selectedWordsArea');
+            const avail = document.getElementById('availableWordsArea');
+            if (sel) {
+                sel.innerHTML = appState.selectedWords.length === 0 ? '<p class="text-gray-400">Tap words</p>' : appState.selectedWords.map(w => `<button onclick="moveWordToAvailable('${w}')" class="px-4 py-2 bg-blue-500 text-white rounded-lg">${w}</button>`).join('');
             }
-
-            if (availableArea) {
-                availableArea.innerHTML = appState.availableWords.map(word =>
-                    `<button onclick="moveWordToSelected('${word}')" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 smooth-transition font-medium">${word}</button>`
-                ).join('');
-            }
-        }
-
-        function checkAnswer() {
-            if (appState.selectedWords.length === 0) {
-                alert('⚠️ Please select at least one word to form a sentence!');
-                return;
-            }
-
-            const userAnswer = appState.selectedWords.join(' ');
-            const correctAnswer = appState.questions[appState.currentQuestion].correctSentence;
-            const questionScore = appState.questions[appState.currentQuestion].score;
-            const isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
-
-            const result = {
-                studentName: appState.studentName,
-                studentClass: appState.studentClass,
-                questionNumber: appState.currentQuestion + 1,
-                question: correctAnswer,
-                userAnswer: userAnswer,
-                isCorrect: isCorrect,
-                score: questionScore,
-                timestamp: new Date().toLocaleString()
-            };
-
-            appState.results.push(result);
-            FirebaseSync.pushResult(result); // Save to Firebase
-
-            if (isCorrect) {
-                alert(`🎉 Correct! Well done! You earned ${questionScore} points!`);
-            } else {
-                alert(`❌ Incorrect. The correct answer is: ${correctAnswer}\nYou earned 0 points.`);
-            }
-
-            if (appState.currentQuestion < appState.questions.length - 1) {
-                appState.currentQuestion++;
-                appState.selectedWords = [];
-                appState.availableWords = shuffleArray(appState.questions[appState.currentQuestion].words);
-                render();
-            } else {
-                const totalScore = appState.results.reduce((sum, r) => sum + (r.isCorrect ? r.score : 0), 0);
-                const maxScore = appState.results.reduce((sum, r) => sum + r.score, 0);
-                alert(`🎊 Game completed!\n\nYour Total Score: ${totalScore} / ${maxScore}\n\nCheck the report for details.`);
-                appState.currentScreen = 'report';
-                render();
+            if (avail) {
+                avail.innerHTML = appState.availableWords.map(w => `<button onclick="moveWordToSelected('${w}')" class="px-4 py-2 bg-gray-200 rounded-lg">${w}</button>`).join('');
             }
         }
 
         function handleAddQuestion() {
-            const wordsInput = document.getElementById('formWords');
-            const sentenceInput = document.getElementById('formSentence');
-            const imageInput = document.getElementById('formImage');
-            const scoreInput = document.getElementById('formScore');
+            const w = document.getElementById('formWords');
+            const s = document.getElementById('formSentence');
+            const i = document.getElementById('formImage');
+            const p = document.getElementById('formScore');
 
-            if (wordsInput) appState.formWords = wordsInput.value;
-            if (sentenceInput) appState.formSentence = sentenceInput.value;
-            if (imageInput) appState.formImage = imageInput.value;
-            if (scoreInput) appState.formScore = parseInt(scoreInput.value) || 10;
+            if (w) appState.formWords = w.value;
+            if (s) appState.formSentence = s.value;
+            if (i) appState.formImage = i.value;
+            if (p) appState.formScore = parseInt(p.value) || 10;
 
             if (!appState.formWords.trim() || !appState.formSentence.trim()) {
-                alert('Please fill in all required fields!');
+                alert('Fill all required fields!');
                 return;
             }
 
-            const wordsArray = appState.formWords.split(',').map(w => w.trim()).filter(w => w);
+            const words = appState.formWords.split(',').map(x => x.trim()).filter(x => x);
             const newQuestion = {
                 id: Date.now(),
-                words: wordsArray,
+                words: words,
                 correctSentence: appState.formSentence,
                 image: appState.formImage,
                 score: appState.formScore
             };
 
             appState.questions.push(newQuestion);
-            FirebaseSync.syncQuestions(); // Sync to Firebase
+            syncQuestions();
 
             appState.formWords = '';
             appState.formSentence = '';
             appState.formImage = '📝';
             appState.formScore = 10;
+            
             alert('✅ Question added successfully!');
             changeScreen('menu');
         }
@@ -1270,35 +875,36 @@
         }
 
         function handleUpdateQuestion() {
-            const wordsInput = document.getElementById('formWords');
-            const sentenceInput = document.getElementById('formSentence');
-            const imageInput = document.getElementById('formImage');
-            const scoreInput = document.getElementById('formScore');
+            const w = document.getElementById('formWords');
+            const s = document.getElementById('formSentence');
+            const i = document.getElementById('formImage');
+            const p = document.getElementById('formScore');
 
-            if (wordsInput) appState.formWords = wordsInput.value;
-            if (sentenceInput) appState.formSentence = sentenceInput.value;
-            if (imageInput) appState.formImage = imageInput.value;
-            if (scoreInput) appState.formScore = parseInt(scoreInput.value) || 10;
+            if (w) appState.formWords = w.value;
+            if (s) appState.formSentence = s.value;
+            if (i) appState.formImage = i.value;
+            if (p) appState.formScore = parseInt(p.value) || 10;
 
             if (!appState.formWords.trim() || !appState.formSentence.trim()) {
-                alert('Please fill in all required fields!');
+                alert('Fill all required fields!');
                 return;
             }
 
-            const wordsArray = appState.formWords.split(',').map(w => w.trim()).filter(w => w);
+            const words = appState.formWords.split(',').map(x => x.trim()).filter(x => x);
             appState.questions = appState.questions.map(q =>
                 q.id === appState.editingQuestion.id
-                    ? { ...q, words: wordsArray, correctSentence: appState.formSentence, image: appState.formImage, score: appState.formScore }
+                    ? { ...q, words: words, correctSentence: appState.formSentence, image: appState.formImage, score: appState.formScore }
                     : q
             );
 
-            FirebaseSync.syncQuestions(); // Sync to Firebase
+            syncQuestions();
 
             appState.editingQuestion = null;
             appState.formWords = '';
             appState.formSentence = '';
             appState.formImage = '📝';
             appState.formScore = 10;
+
             alert('✅ Question updated successfully!');
             changeScreen('menu');
         }
@@ -1306,36 +912,63 @@
         function deleteQuestion(questionId) {
             if (confirm('Are you sure you want to delete this question?')) {
                 appState.questions = appState.questions.filter(q => q.id !== questionId);
-                FirebaseSync.syncQuestions(); // Sync to Firebase
+                syncQuestions();
                 render();
                 alert('✅ Question deleted successfully!');
             }
         }
 
-        function clearAllData() {
-            if (confirm('⚠️ Are you sure you want to clear all student data?\n\nThis will delete all results but keep the questions.\n\nThis action cannot be undone!')) {
-                appState.results = [];
-                appState.allResults = [];
-                FirebaseSync.clearAllResults().then(() => {
-                    render();
-                    alert('✅ All student data has been cleared!');
-                });
+        async function checkAnswer() {
+            if (appState.selectedWords.length === 0) { alert('Pilih kata!'); return; }
+
+            const ans = appState.selectedWords.join(' ');
+            const correct = appState.questions[appState.currentQuestion].correctSentence;
+            const score = appState.questions[appState.currentQuestion].score;
+            const isCorrect = ans.toLowerCase() === correct.toLowerCase();
+
+            const result = {
+                studentName: appState.studentName,
+                studentClass: appState.studentClass,
+                questionNumber: appState.currentQuestion + 1,
+                question: correct,
+                userAnswer: ans,
+                isCorrect: isCorrect,
+                score: score,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            appState.sessionResults.push(result);
+            console.log('📝 Q' + result.questionNumber + ':', isCorrect ? 'CORRECT' : 'WRONG');
+
+            await pushResult(result);
+
+            if (isCorrect) alert(`🎉 Benar! +${score}pts`);
+            else alert(`❌ Salah. Jawaban: ${correct}`);
+
+            if (appState.currentQuestion < appState.questions.length - 1) {
+                appState.currentQuestion++;
+                appState.selectedWords = [];
+                appState.availableWords = shuffleArray(appState.questions[appState.currentQuestion].words);
+                render();
+            } else {
+                const total = appState.sessionResults.reduce((s, r) => s + (r.isCorrect ? r.score : 0), 0);
+                const max = appState.sessionResults.reduce((s, r) => s + r.score, 0);
+                console.log('🏁 Finished:', total, '/', max);
+                alert(`🎊 Selesai!\n\nSkor: ${total}/${max}`);
+                appState.currentScreen = 'menu';
+                render();
             }
         }
-
-        // ═══════════════════════════════════════════════════════════════════
-        // MAIN RENDER
-        // ═══════════════════════════════════════════════════════════════════
 
         function render() {
             const app = document.getElementById('app');
             switch(appState.currentScreen) {
                 case 'menu':
                     app.innerHTML = renderMenu();
-                    const nameInput = document.getElementById('studentName');
-                    const classInput = document.getElementById('studentClass');
-                    if (nameInput) nameInput.addEventListener('input', (e) => { appState.studentName = e.target.value; });
-                    if (classInput) classInput.addEventListener('input', (e) => { appState.studentClass = e.target.value; });
+                    const n = document.getElementById('studentName');
+                    const c = document.getElementById('studentClass');
+                    if (n) n.addEventListener('input', e => { appState.studentName = e.target.value; });
+                    if (c) c.addEventListener('input', e => { appState.studentClass = e.target.value; });
                     break;
                 case 'add':
                     app.innerHTML = renderAddQuestion();
@@ -1356,18 +989,20 @@
         }
 
         // ═══════════════════════════════════════════════════════════════════
-        // INITIALIZATION
+        // INIT
         // ═══════════════════════════════════════════════════════════════════
 
         window.onload = function() {
-            console.log('🚀 App starting...');
-            setFirebaseStatus('loading', 'Connecting to Firebase...');
-            
-            waitForFirebase(() => {
-                console.log('✅ Firebase ready, initializing listeners...');
-                FirebaseSync.initializeListeners();
-                render();
-            });
+            console.log('═══════════════════════════════════');
+            console.log('🚀 FIRESTORE APP READY');
+            console.log('═══════════════════════════════════');
+            if (firebaseReady) {
+                setupListeners();
+            } else {
+                console.error('❌ Firestore not ready!');
+                alert('❌ Firestore gagal!\n\nPastikan Firestore enabled di Firebase Console.');
+            }
+            render();
         };
     </script>
 </body>
